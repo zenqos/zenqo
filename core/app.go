@@ -68,7 +68,8 @@ func (a *App) buildRoutes() {
 			a.router.Use(GuardToMiddleware(g))
 		}
 
-		routeHandler := func(r chi.Router) {
+		mount := func(cr chi.Router) {
+			r := newChiAdapter(cr)
 			for _, m := range a.modules {
 				for _, c := range m.Controllers() {
 					c.RegisterRoutes(r)
@@ -77,9 +78,9 @@ func (a *App) buildRoutes() {
 			}
 		}
 		if a.prefix != "" {
-			a.router.Route(a.prefix, routeHandler)
+			a.router.Route(a.prefix, mount)
 		} else {
-			routeHandler(a.router)
+			mount(a.router)
 		}
 	})
 }
@@ -116,4 +117,33 @@ func (a *App) Start(addr string) error {
 func (a *App) Handler() http.Handler {
 	a.buildRoutes()
 	return a.router
+}
+
+// chiAdapter wraps chi.Router to implement the public Router interface.
+// This keeps chi as an internal implementation detail — framework users
+// never import or interact with chi directly.
+type chiAdapter struct {
+	r chi.Router
+}
+
+func newChiAdapter(r chi.Router) Router {
+	return &chiAdapter{r: r}
+}
+
+func (a *chiAdapter) Get(path string, h http.HandlerFunc)    { a.r.Get(path, h) }
+func (a *chiAdapter) Post(path string, h http.HandlerFunc)   { a.r.Post(path, h) }
+func (a *chiAdapter) Put(path string, h http.HandlerFunc)    { a.r.Put(path, h) }
+func (a *chiAdapter) Patch(path string, h http.HandlerFunc)  { a.r.Patch(path, h) }
+func (a *chiAdapter) Delete(path string, h http.HandlerFunc) { a.r.Delete(path, h) }
+
+func (a *chiAdapter) Use(mw ...MiddlewareFunc) {
+	for _, m := range mw {
+		a.r.Use(m)
+	}
+}
+
+func (a *chiAdapter) Group(path string, fn func(r Router)) {
+	a.r.Route(path, func(cr chi.Router) {
+		fn(newChiAdapter(cr))
+	})
 }

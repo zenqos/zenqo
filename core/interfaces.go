@@ -3,9 +3,20 @@ package core
 import (
 	"context"
 	"net/http"
-
-	"github.com/go-chi/chi/v5"
 )
+
+// Router is Zenqo's route registration interface.
+// Controllers use this to declare routes without depending on any specific router library.
+// The underlying implementation is an internal detail of the framework.
+type Router interface {
+	Get(path string, h http.HandlerFunc)
+	Post(path string, h http.HandlerFunc)
+	Put(path string, h http.HandlerFunc)
+	Patch(path string, h http.HandlerFunc)
+	Delete(path string, h http.HandlerFunc)
+	Use(mw ...MiddlewareFunc)
+	Group(path string, fn func(r Router))
+}
 
 // Module groups related Controllers into a single functional unit.
 // Each module is self-contained and declares its own dependencies.
@@ -18,7 +29,7 @@ type Module interface {
 // Embed BaseController to get a builder-style route registration API.
 type Controller interface {
 	BasePath() string
-	RegisterRoutes(r chi.Router)
+	RegisterRoutes(r Router)
 }
 
 // Guard controls access to a route before the handler is invoked.

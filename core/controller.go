@@ -1,10 +1,6 @@
 package core
 
-import (
-	"net/http"
-
-	"github.com/go-chi/chi/v5"
-)
+import "net/http"
 
 // RouteDefinition holds the configuration for a single route,
 // including its HTTP method, path, handler, and any Guards,
@@ -111,17 +107,15 @@ func (bc *BaseController) addRoute(method, path string, handler http.HandlerFunc
 	return rd
 }
 
-// RegisterRoutes mounts all declared routes onto the given chi.Router,
+// RegisterRoutes mounts all declared routes onto the given Router,
 // applying controller-level and route-level Guards, Interceptors, and Middlewares
 // in the correct order.
-func (bc *BaseController) RegisterRoutes(r chi.Router) {
+func (bc *BaseController) RegisterRoutes(r Router) {
 	if bc.basePath == "" {
 		panic("zenqo: SetBasePath must be called before the controller is registered")
 	}
-	r.Route(bc.basePath, func(r chi.Router) {
-		for _, mw := range bc.middlewares {
-			r.Use(mw)
-		}
+	r.Group(bc.basePath, func(r Router) {
+		r.Use(bc.middlewares...)
 		for _, g := range bc.guards {
 			r.Use(GuardToMiddleware(g))
 		}
