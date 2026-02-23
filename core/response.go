@@ -1,8 +1,6 @@
 package core
 
 import (
-	"bytes"
-	"encoding/json"
 	"log"
 	"net/http"
 )
@@ -36,12 +34,12 @@ type PaginationMeta struct {
 	PerPage int `json:"per_page"`
 }
 
-// JSON encodes data into a buffer first, then writes the response.
-// If encoding fails before headers are sent, a 500 is returned instead
-// of a partial JSON body.
+// JSON encodes data and writes the response.
+// Uses Zenqo's custom encoder — struct tags are optional,
+// PascalCase field names are automatically converted to camelCase.
 func JSON(w http.ResponseWriter, status int, data interface{}) {
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(data); err != nil {
+	b, err := zMarshal(data)
+	if err != nil {
 		log.Printf("[Zenqo] JSON encoding error: %v", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -50,7 +48,7 @@ func JSON(w http.ResponseWriter, status int, data interface{}) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	buf.WriteTo(w) //nolint:errcheck // write errors are non-actionable after WriteHeader
+	w.Write(b) //nolint:errcheck
 }
 
 // OK sends a 200 response wrapped in SuccessResponse.

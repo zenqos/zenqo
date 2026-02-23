@@ -1,49 +1,47 @@
 package core
 
 import (
-	"log"
+	"context"
+	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 )
 
 // App is the central application instance.
-// It wires modules together, applies global middleware and guards,
-// and starts the HTTP server.
 type App struct {
 	router       chi.Router
 	modules      []Module
+	controllers  []Controller
 	globalGuards []Guard
 	prefix       string
-	buildOnce    sync.Once // ensures routes are registered exactly once, even under concurrent access
+	buildOnce    sync.Once
 }
 
-// NewApp creates a new App with sensible defaults:
-// RequestID, RealIP, Logger, and Recoverer middleware are pre-registered.
 func NewApp() *App {
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
-	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 	return &App{router: r}
 }
 
-// SetGlobalPrefix sets a URL prefix applied to all registered routes (e.g. "/api/v1").
 func (a *App) SetGlobalPrefix(prefix string) *App {
 	a.prefix = prefix
 	return a
 }
 
-// UseGlobalGuard registers Guards that run on every request, before any route-level guards.
 func (a *App) UseGlobalGuard(guards ...Guard) *App {
 	a.globalGuards = append(a.globalGuards, guards...)
 	return a
 }
 
-// Use registers raw middleware on the root router.
 func (a *App) Use(mws ...MiddlewareFunc) *App {
 	for _, mw := range mws {
 		a.router.Use(mw)
@@ -51,30 +49,41 @@ func (a *App) Use(mws ...MiddlewareFunc) *App {
 	return a
 }
 
-// UseModule registers one or more Modules and their Controllers with the application.
 func (a *App) UseModule(modules ...Module) *App {
-	for _, m := range modules {
-		a.modules = append(a.modules, m)
-		log.Printf("[Zenqo] Module registered: %s", m.Name())
-	}
+	a.modules = append(a.modules, modules...)
 	return a
 }
 
-// buildRoutes registers all routes exactly once.
-// sync.Once guarantees this is safe under concurrent access (e.g. parallel tests).
+// UseController registers one or more Controllers directly without a Module wrapper.
+// This is the recommended approach for most projects — no module.go needed.
+func (a *App) UseController(controllers ...Controller) *App {
+	a.controllers = append(a.controllers, controllers...)
+	return a
+}
+
+// UseStatic serves files from dir under the given URL prefix.
+// Example: UseStatic("/", "./public") serves index.html, CSS, JS, etc.
+func (a *App) UseStatic(prefix, dir string) *App {
+	fs := http.FileServer(http.Dir(dir))
+	a.router.Handle(prefix, http.StripPrefix(prefix, fs))
+	a.router.Handle(prefix+"/*", http.StripPrefix(prefix, fs))
+	return a
+}
+
 func (a *App) buildRoutes() {
 	a.buildOnce.Do(func() {
 		for _, g := range a.globalGuards {
 			a.router.Use(GuardToMiddleware(g))
 		}
-
 		mount := func(cr chi.Router) {
 			r := newChiAdapter(cr)
 			for _, m := range a.modules {
 				for _, c := range m.Controllers() {
 					c.RegisterRoutes(r)
-					log.Printf("[Zenqo]   → Controller: %s%s", a.prefix, c.BasePath())
 				}
+			}
+			for _, c := range a.controllers {
+				c.RegisterRoutes(r)
 			}
 		}
 		if a.prefix != "" {
@@ -85,50 +94,83 @@ func (a *App) buildRoutes() {
 	})
 }
 
-// Start builds all routes and starts the HTTP server on the given address (e.g. ":3000").
 func (a *App) Start(addr string) error {
+	started := time.Now()
 	a.buildRoutes()
 
-	totalRoutes := 0
-	chi.Walk(a.router, func(_, _ string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		totalRoutes++
-		return nil
-	})
-	if totalRoutes == 0 {
-		log.Printf("[Zenqo] WARNING: no routes registered — did you forget to call UseModule?")
+	zlog("Boot", "Starting application...")
+
+	if len(a.modules) == 0 && len(a.controllers) == 0 {
+		zlog("App", "Ready — add controllers in internal/app/app.go")
 	}
 
-	log.Printf("[Zenqo] Modules  : %d", len(a.modules))
 	for _, m := range a.modules {
-		log.Printf("[Zenqo]   📦 %s (%d controllers)", m.Name(), len(m.Controllers()))
+		zlog("Module", m.Name()+" initialized")
 	}
+	for _, c := range a.controllers {
+		zlog("Controller", c.BasePath()+" registered")
+	}
+
 	chi.Walk(a.router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		log.Printf("[Zenqo] Route    : %-6s %s", method, route)
+		zlog("Router", fmt.Sprintf("%-6s %s", method, route))
 		return nil
 	})
-	log.Printf("[Zenqo] Listening on %s", addr)
 
-	return http.ListenAndServe(addr, a.router)
+	host := addr
+	if host[0] == ':' {
+		host = "http://localhost" + host
+	}
+	elapsed := time.Since(started).Milliseconds()
+	zlog("Server", fmt.Sprintf("Listening on %s  +%dms", host, elapsed))
+
+	a.router.Use(chimw.Logger)
+
+	srv := &http.Server{Addr: addr, Handler: a.router}
+
+	go func() {
+		quit := make(chan os.Signal, 1)
+		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+		<-quit
+		zlog("Server", "Shutting down gracefully...")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		srv.Shutdown(ctx)
+	}()
+
+	return srv.ListenAndServe()
 }
 
-// Handler builds all routes and returns the underlying http.Handler.
-// Intended for use with httptest in unit and integration tests.
-// Safe to call multiple times — routes are only registered once.
 func (a *App) Handler() http.Handler {
 	a.buildRoutes()
 	return a.router
 }
 
-// chiAdapter wraps chi.Router to implement the public Router interface.
-// This keeps chi as an internal implementation detail — framework users
-// never import or interact with chi directly.
-type chiAdapter struct {
-	r chi.Router
+// URLParam extracts a named URL parameter set by the chi router.
+func URLParam(r *http.Request, key string) string {
+	return chi.URLParam(r, key)
 }
 
-func newChiAdapter(r chi.Router) Router {
-	return &chiAdapter{r: r}
+// zlog prints a structured INFO log in Zenqo format.
+func zlog(label, msg string) {
+	ts := time.Now().Format("2006/01/02 15:04:05")
+	fmt.Fprintf(os.Stdout, "[Zenqo] %s  \033[32mLOG\033[0m  [%s]  %s\n", ts, label, msg)
 }
+
+// zerr prints a structured ERROR log in Zenqo format.
+func zerr(label, msg string) {
+	ts := time.Now().Format("2006/01/02 15:04:05")
+	fmt.Fprintf(os.Stderr, "[Zenqo] %s  \033[31mERR\033[0m  [%s]  %s\n", ts, label, msg)
+}
+
+// Zlog is the public logger for use inside modules and handlers.
+func Zlog(label, msg string) { zlog(label, msg) }
+
+// Zerr is the public error logger for use inside modules and handlers.
+func Zerr(label, msg string) { zerr(label, msg) }
+
+type chiAdapter struct{ r chi.Router }
+
+func newChiAdapter(r chi.Router) Router { return &chiAdapter{r: r} }
 
 func (a *chiAdapter) Get(path string, h http.HandlerFunc)    { a.r.Get(path, h) }
 func (a *chiAdapter) Post(path string, h http.HandlerFunc)   { a.r.Post(path, h) }
