@@ -1,9 +1,6 @@
 package config
 
-import (
-	"log"
-	"os"
-)
+import "os"
 
 type Config struct {
 	Port string
@@ -22,12 +19,4 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
-}
-
-func mustGetEnv(key string) string {
-	v := os.Getenv(key)
-	if v == "" {
-		log.Fatalf("[config] required environment variable %q is not set", key)
-	}
-	return v
 }

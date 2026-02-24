@@ -1,17 +1,25 @@
 package app
 
 import (
+	"net/http"
+
 	"github.com/ftery0/zenqo/core"
+	"github.com/ftery0/zenqo/middleware"
 	"my-app/internal/config"
 )
 
-// New wires all controllers together.
-// cfg is accepted for future use — pass it to controllers that need DB connections, ports, etc.
-// Add UseController calls here when you need new features.
-func New(cfg config.Config) *core.App {
-	return core.NewApp()
-	// Example:
-	// return core.NewApp().
-	// 	UseController(user.NewController()).
-	// 	UseController(product.NewController())
+// New creates the application with direct routing — no controller boilerplate needed.
+func New(_ config.Config) *core.App {
+	app := core.NewApp()
+	app.Use(middleware.SecureHeaders())
+
+	app.GET("/", func(r *http.Request) (any, error) {
+		return map[string]string{"message": "Welcome to Zenqo!"}, nil
+	})
+
+	app.GET("/health", func(r *http.Request) (any, error) {
+		return map[string]string{"status": "ok"}, nil
+	})
+
+	return app
 }
