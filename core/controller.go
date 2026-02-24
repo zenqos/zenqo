@@ -1,12 +1,7 @@
 package core
 
 import (
-	"errors"
-	"fmt"
 	"net/http"
-
-	chimw "github.com/go-chi/chi/v5/middleware"
-	zlog "github.com/ftery0/zenqo/internal/log"
 )
 
 // RouteDefinition holds the configuration for a single route,
@@ -16,7 +11,8 @@ import (
 type RouteDefinition struct {
 	Method       string
 	Path         string
-	HandlerFunc  http.HandlerFunc
+	HandlerFunc  http.HandlerFunc // set by Handle() for raw net/http handlers
+	zenqoHandler HandlerFunc      // set by GET/POST/etc; adapted lazily in RegisterRoutes
 	Guards       []Guard
 	Interceptors []Interceptor
 	Middlewares  []MiddlewareFunc
@@ -50,6 +46,12 @@ type BaseController struct {
 	guards       []Guard
 	interceptors []Interceptor
 	middlewares  []MiddlewareFunc
+	errHandler   ErrorHandlerFunc
+}
+
+// setErrorHandler satisfies the unexported errorHandlerSetter interface used by App.buildRoutes().
+func (bc *BaseController) setErrorHandler(fn ErrorHandlerFunc) {
+	bc.errHandler = fn
 }
 
 // SetBasePath sets the URL prefix for all routes in this controller.
@@ -85,29 +87,39 @@ func (bc *BaseController) UseControllerMiddleware(m ...MiddlewareFunc) {
 
 // GET registers a GET route and returns a RouteDefinition for further configuration.
 func (bc *BaseController) GET(p string, h HandlerFunc) *RouteDefinition {
-	return bc.addRoute("GET", p, adapt("GET", h))
+	rd := &RouteDefinition{Method: "GET", Path: p, zenqoHandler: h}
+	bc.routes = append(bc.routes, rd)
+	return rd
 }
 
 // POST registers a POST route and returns a RouteDefinition for further configuration.
 // Automatically responds with 201 Created when data is returned.
 func (bc *BaseController) POST(p string, h HandlerFunc) *RouteDefinition {
-	return bc.addRoute("POST", p, adapt("POST", h))
+	rd := &RouteDefinition{Method: "POST", Path: p, zenqoHandler: h}
+	bc.routes = append(bc.routes, rd)
+	return rd
 }
 
 // PUT registers a PUT route and returns a RouteDefinition for further configuration.
 func (bc *BaseController) PUT(p string, h HandlerFunc) *RouteDefinition {
-	return bc.addRoute("PUT", p, adapt("PUT", h))
+	rd := &RouteDefinition{Method: "PUT", Path: p, zenqoHandler: h}
+	bc.routes = append(bc.routes, rd)
+	return rd
 }
 
 // PATCH registers a PATCH route and returns a RouteDefinition for further configuration.
 func (bc *BaseController) PATCH(p string, h HandlerFunc) *RouteDefinition {
-	return bc.addRoute("PATCH", p, adapt("PATCH", h))
+	rd := &RouteDefinition{Method: "PATCH", Path: p, zenqoHandler: h}
+	bc.routes = append(bc.routes, rd)
+	return rd
 }
 
 // DELETE registers a DELETE route and returns a RouteDefinition for further configuration.
 // Automatically responds with 204 No Content when nil is returned.
 func (bc *BaseController) DELETE(p string, h HandlerFunc) *RouteDefinition {
-	return bc.addRoute("DELETE", p, adapt("DELETE", h))
+	rd := &RouteDefinition{Method: "DELETE", Path: p, zenqoHandler: h}
+	bc.routes = append(bc.routes, rd)
+	return rd
 }
 
 // Handle registers a raw net/http handler for cases that need full ResponseWriter control.
@@ -115,25 +127,14 @@ func (bc *BaseController) Handle(method, path string, h http.HandlerFunc) *Route
 	return bc.addRoute(method, path, h)
 }
 
-// adapt converts a Zenqo HandlerFunc into a standard http.HandlerFunc.
-// It handles JSON serialization and HTTP error mapping automatically.
-func adapt(method string, h HandlerFunc) http.HandlerFunc {
+// adapt wraps a Zenqo HandlerFunc into a standard http.HandlerFunc.
+// JSON serialization, HTTP status mapping, and error routing are handled automatically.
+// Errors are dispatched to errHandler — DefaultErrorHandler if none is set.
+func adapt(method string, h HandlerFunc, errHandler ErrorHandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data, err := h(r)
 		if err != nil {
-			var ve *ValidationError
-			if errors.As(err, &ve) {
-				ValidationFailed(w, ve.Errors)
-				return
-			}
-			var he *HTTPError
-			if errors.As(err, &he) {
-				Error(w, he.Status, he.Message)
-			} else {
-				reqID := chimw.GetReqID(r.Context())
-				zlog.Err("Handler", fmt.Sprintf("[%s] %s %s — %v", reqID, r.Method, r.URL.Path, err))
-				InternalError(w, "internal server error")
-			}
+			errHandler(w, r, err)
 			return
 		}
 		if data == nil {
@@ -161,6 +162,12 @@ func (bc *BaseController) RegisterRoutes(r Router) {
 	if bc.basePath == "" {
 		panic("zenqo: SetBasePath must be called before the controller is registered")
 	}
+
+	errHandler := bc.errHandler
+	if errHandler == nil {
+		errHandler = DefaultErrorHandler
+	}
+
 	r.Group(bc.basePath, func(r Router) {
 		r.Use(bc.middlewares...)
 		for _, g := range bc.guards {
@@ -171,7 +178,13 @@ func (bc *BaseController) RegisterRoutes(r Router) {
 		}
 
 		for _, route := range bc.routes {
-			handler := route.HandlerFunc
+			var handler http.HandlerFunc
+			if route.zenqoHandler != nil {
+				handler = adapt(route.Method, route.zenqoHandler, errHandler)
+			} else {
+				handler = route.HandlerFunc
+			}
+
 			for i := len(route.Interceptors) - 1; i >= 0; i-- {
 				handler = applyInterceptor(route.Interceptors[i], handler)
 			}
