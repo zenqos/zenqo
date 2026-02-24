@@ -49,11 +49,11 @@ func applyGuard(g Guard, next http.HandlerFunc) http.HandlerFunc {
 		allowed, err := g.CanActivate(r)
 		if err != nil {
 			zlog.Err("Guard", err.Error())
-			JSON(w, 500, ErrorResponse{500, "internal server error"})
+			JSON(w, 500, ErrorResponse{Code: 500, Message: "internal server error"})
 			return
 		}
 		if !allowed {
-			JSON(w, 403, ErrorResponse{403, "access denied"})
+			JSON(w, 403, ErrorResponse{Code: 403, Message: "access denied"})
 			return
 		}
 		next(w, r)
