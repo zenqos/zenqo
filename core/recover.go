@@ -15,6 +15,9 @@ func zenqoRecoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rvr := recover(); rvr != nil {
+				if rvr == http.ErrAbortHandler {
+					panic(rvr)
+				}
 				reqID := chimw.GetReqID(r.Context())
 				zlog.Err("Panic", fmt.Sprintf("[%s] %s %s — %v\n%s",
 					reqID, r.Method, r.URL.Path, rvr, debug.Stack()))
