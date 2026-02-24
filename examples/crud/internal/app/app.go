@@ -2,15 +2,17 @@ package app
 
 import (
 	"github.com/ftery0/zenqo/core"
+	"github.com/ftery0/zenqo/middleware"
 	"my-app/internal/config"
 	"my-app/internal/user"
 )
 
-// New wires all controllers together.
-// cfg is used in main.go for Port; pass it to controllers that need DB connections, etc.
-// Add UseController calls here when you need new features.
-func New(cfg config.Config) *core.App {
-	return core.NewApp().
+// New creates the application and wires all controllers.
+// Add more UseController calls as you build new features.
+func New(_ config.Config) *core.App {
+	app := core.NewApp()
+	app.Use(middleware.SecureHeaders())
+	return app.
 		SetGlobalPrefix("/api/v1").
 		UseController(user.NewController())
 }

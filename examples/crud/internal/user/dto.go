@@ -1,7 +1,11 @@
 package user
 
-// User is the entity returned in API responses.
-// No struct tags needed — Zenqo automatically converts field names to camelCase.
+// User is the API response entity.
+// Zenqo automatically converts PascalCase → camelCase in JSON responses:
+//
+//	ID → "id", Name → "name", Email → "email"
+//
+// No struct tags needed.
 type User struct {
 	ID    int64
 	Name  string
@@ -9,14 +13,15 @@ type User struct {
 }
 
 // CreateUserDTO is the request body for POST /users.
+// Expected JSON: { "name": "John", "email": "john@example.com" }
 type CreateUserDTO struct {
-	Name  string
-	Email string
+	Name  string `validate:"required,min=2,max=50"`
+	Email string `validate:"required,email"`
 }
 
-// UpdateUserDTO is the request body for PUT /users/:id.
-// Empty fields are ignored (partial update).
+// UpdateUserDTO is the request body for PUT /users/{id}.
+// Pointer fields distinguish "not sent" (nil) from "set to empty" (*"").
 type UpdateUserDTO struct {
-	Name  string
-	Email string
+	Name  *string `validate:"max=50"`
+	Email *string `validate:"email"`
 }

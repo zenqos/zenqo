@@ -1,3 +1,13 @@
+// Basic example — a working Zenqo server out of the box.
+//
+// Run:
+//
+//	go run .
+//
+// Test:
+//
+//	curl http://localhost:3000/
+//	curl http://localhost:3000/health
 package main
 
 import (

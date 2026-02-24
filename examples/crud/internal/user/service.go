@@ -5,8 +5,8 @@ import (
 	"sync"
 )
 
-// Service holds in-memory user data.
-// In a real project replace this with a database repository.
+// Service manages user data in memory.
+// Replace with a database repository in a real project.
 type Service struct {
 	mu      sync.RWMutex
 	users   map[int64]*User
@@ -14,7 +14,13 @@ type Service struct {
 }
 
 func NewService() *Service {
-	return &Service{users: make(map[int64]*User)}
+	svc := &Service{users: make(map[int64]*User)}
+
+	// Seed data — the API returns something useful right away.
+	svc.Create(CreateUserDTO{Name: "Alice", Email: "alice@example.com"})
+	svc.Create(CreateUserDTO{Name: "Bob", Email: "bob@example.com"})
+
+	return svc
 }
 
 func (s *Service) FindAll() []*User {
@@ -57,11 +63,11 @@ func (s *Service) Update(id int64, dto UpdateUserDTO) (*User, error) {
 	if !ok {
 		return nil, fmt.Errorf("user %d not found", id)
 	}
-	if dto.Name != "" {
-		u.Name = dto.Name
+	if dto.Name != nil {
+		u.Name = *dto.Name
 	}
-	if dto.Email != "" {
-		u.Email = dto.Email
+	if dto.Email != nil {
+		u.Email = *dto.Email
 	}
 	return u, nil
 }
