@@ -2,7 +2,11 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+
+	chimw "github.com/go-chi/chi/v5/middleware"
+	zlog "github.com/ftery0/zenqo/internal/log"
 )
 
 // RouteDefinition holds the configuration for a single route,
@@ -117,10 +121,17 @@ func adapt(method string, h HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data, err := h(r)
 		if err != nil {
+			var ve *ValidationError
+			if errors.As(err, &ve) {
+				ValidationFailed(w, ve.Errors)
+				return
+			}
 			var he *HTTPError
 			if errors.As(err, &he) {
 				Error(w, he.Status, he.Message)
 			} else {
+				reqID := chimw.GetReqID(r.Context())
+				zlog.Err("Handler", fmt.Sprintf("[%s] %s %s — %v", reqID, r.Method, r.URL.Path, err))
 				InternalError(w, "internal server error")
 			}
 			return
