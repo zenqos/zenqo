@@ -3,8 +3,8 @@ package core
 import (
 	"net/http"
 
-	enc "github.com/ftery0/zenqo/internal/encoding"
-	zlog "github.com/ftery0/zenqo/internal/log"
+	enc "github.com/zenqos/zenqo/internal/encoding"
+	zlog "github.com/zenqos/zenqo/internal/log"
 )
 
 // SuccessResponse is the standard envelope for successful responses.

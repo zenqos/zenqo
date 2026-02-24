@@ -12,7 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
-	zlog "github.com/ftery0/zenqo/internal/log"
+	zlog "github.com/zenqos/zenqo/internal/log"
 )
 
 // App is the central application instance.

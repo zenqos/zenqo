@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	enc "github.com/ftery0/zenqo/internal/encoding"
+	enc "github.com/zenqos/zenqo/internal/encoding"
 )
 
 // validate checks struct fields annotated with `validate:"..."` tags.

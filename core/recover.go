@@ -6,7 +6,7 @@ import (
 	"runtime/debug"
 
 	chimw "github.com/go-chi/chi/v5/middleware"
-	zlog "github.com/ftery0/zenqo/internal/log"
+	zlog "github.com/zenqos/zenqo/internal/log"
 )
 
 // zenqoRecoverer recovers from panics, logs the panic value and stack trace,

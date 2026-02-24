@@ -3,7 +3,7 @@ package user
 import (
 	"net/http"
 
-	"github.com/ftery0/zenqo/core"
+	"github.com/zenqos/zenqo/core"
 )
 
 // Controller handles HTTP requests for the /users resource.

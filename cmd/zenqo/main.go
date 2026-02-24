@@ -2,7 +2,7 @@
 //
 // Install:
 //
-//	go install github.com/ftery0/zenqo/cmd/zenqo@latest
+//	go install github.com/zenqos/zenqo/cmd/zenqo@latest
 //
 // Usage:
 //
@@ -25,7 +25,7 @@ type projectData struct {
 	Port        string // default server port
 }
 
-const zenqoModule = "github.com/ftery0/zenqo"
+const zenqoModule = "github.com/zenqos/zenqo"
 
 func main() {
 	if len(os.Args) < 3 {
@@ -220,8 +220,8 @@ func main() {
 const tmplApp = `package app
 
 import (
-	"github.com/ftery0/zenqo/core"
-	"github.com/ftery0/zenqo/middleware"
+	"github.com/zenqos/zenqo/core"
+	"github.com/zenqos/zenqo/middleware"
 	"{{.ModuleName}}/internal/config"
 )
 
