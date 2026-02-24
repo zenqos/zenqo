@@ -1,8 +1,10 @@
 package core
 
 import (
-	"log"
 	"net/http"
+
+	enc "github.com/ftery0/zenqo/internal/encoding"
+	zlog "github.com/ftery0/zenqo/internal/log"
 )
 
 // SuccessResponse is the standard envelope for successful responses.
@@ -38,9 +40,9 @@ type PaginationMeta struct {
 // Uses Zenqo's custom encoder — struct tags are optional,
 // PascalCase field names are automatically converted to camelCase.
 func JSON(w http.ResponseWriter, status int, data interface{}) {
-	b, err := zMarshal(data)
+	b, err := enc.Marshal(data)
 	if err != nil {
-		log.Printf("[Zenqo] JSON encoding error: %v", err)
+		zlog.Err("JSON", err.Error())
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"code":500,"message":"internal server error"}`)) //nolint:errcheck
@@ -70,6 +72,19 @@ func NotFound(w http.ResponseWriter, msg string) { Error(w, 404, msg) }
 
 // InternalError sends a 500 error response.
 func InternalError(w http.ResponseWriter, msg string) { Error(w, 500, msg) }
+
+// ValidationErrorResponse is the envelope for validation failures.
+// Shape: { "code": 400, "message": "validation failed", "errors": [ { "field": "...", "message": "..." } ] }
+type ValidationErrorResponse struct {
+	Code    int          `json:"code"`
+	Message string       `json:"message"`
+	Errors  []FieldError `json:"errors"`
+}
+
+// ValidationFailed sends a 400 response with per-field validation errors.
+func ValidationFailed(w http.ResponseWriter, errs []FieldError) {
+	JSON(w, 400, ValidationErrorResponse{400, "validation failed", errs})
+}
 
 // Paginated sends a 200 response with list data and pagination metadata.
 func Paginated(w http.ResponseWriter, data interface{}, total, page, perPage int) {

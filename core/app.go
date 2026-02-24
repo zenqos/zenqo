@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
+	zlog "github.com/ftery0/zenqo/internal/log"
 )
 
 // App is the central application instance.
@@ -22,6 +23,7 @@ type App struct {
 	globalGuards []Guard
 	prefix       string
 	buildOnce    sync.Once
+	root         BaseController
 }
 
 func NewApp() *App {
@@ -29,7 +31,9 @@ func NewApp() *App {
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Recoverer)
-	return &App{router: r}
+	a := &App{router: r}
+	a.root.basePath = "/"
+	return a
 }
 
 func (a *App) SetGlobalPrefix(prefix string) *App {
@@ -61,6 +65,21 @@ func (a *App) UseController(controllers ...Controller) *App {
 	return a
 }
 
+// GET registers a top-level GET route directly on the app.
+func (a *App) GET(path string, h HandlerFunc) *RouteDefinition { return a.root.GET(path, h) }
+
+// POST registers a top-level POST route directly on the app.
+func (a *App) POST(path string, h HandlerFunc) *RouteDefinition { return a.root.POST(path, h) }
+
+// PUT registers a top-level PUT route directly on the app.
+func (a *App) PUT(path string, h HandlerFunc) *RouteDefinition { return a.root.PUT(path, h) }
+
+// PATCH registers a top-level PATCH route directly on the app.
+func (a *App) PATCH(path string, h HandlerFunc) *RouteDefinition { return a.root.PATCH(path, h) }
+
+// DELETE registers a top-level DELETE route directly on the app.
+func (a *App) DELETE(path string, h HandlerFunc) *RouteDefinition { return a.root.DELETE(path, h) }
+
 // UseStatic serves files from dir under the given URL prefix.
 // Example: UseStatic("/", "./public") serves index.html, CSS, JS, etc.
 func (a *App) UseStatic(prefix, dir string) *App {
@@ -85,6 +104,9 @@ func (a *App) buildRoutes() {
 			for _, c := range a.controllers {
 				c.RegisterRoutes(r)
 			}
+			if len(a.root.routes) > 0 {
+				a.root.RegisterRoutes(r)
+			}
 		}
 		if a.prefix != "" {
 			a.router.Route(a.prefix, mount)
@@ -98,43 +120,51 @@ func (a *App) Start(addr string) error {
 	started := time.Now()
 	a.buildRoutes()
 
-	zlog("Boot", "Starting application...")
+	zlog.Log("Boot", "Starting application...")
 
-	if len(a.modules) == 0 && len(a.controllers) == 0 {
-		zlog("App", "Ready — add controllers in internal/app/app.go")
+	if len(a.modules) == 0 && len(a.controllers) == 0 && len(a.root.routes) == 0 {
+		zlog.Log("App", "Ready — add controllers in internal/app/app.go")
 	}
 
 	for _, m := range a.modules {
-		zlog("Module", m.Name()+" initialized")
+		zlog.Log("Module", m.Name()+" initialized")
 	}
 	for _, c := range a.controllers {
-		zlog("Controller", c.BasePath()+" registered")
+		zlog.Log("Controller", c.BasePath()+" registered")
 	}
 
 	chi.Walk(a.router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		zlog("Router", fmt.Sprintf("%-6s %s", method, route))
+		zlog.Log("Router", fmt.Sprintf("%-6s %s", method, route))
 		return nil
 	})
 
 	host := addr
-	if host[0] == ':' {
+	if len(host) > 0 && host[0] == ':' {
 		host = "http://localhost" + host
 	}
 	elapsed := time.Since(started).Milliseconds()
-	zlog("Server", fmt.Sprintf("Listening on %s  +%dms", host, elapsed))
+	zlog.Log("Server", fmt.Sprintf("Listening on %s  +%dms", host, elapsed))
 
 	a.router.Use(chimw.Logger)
 
-	srv := &http.Server{Addr: addr, Handler: a.router}
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      a.router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
 
 	go func() {
 		quit := make(chan os.Signal, 1)
 		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 		<-quit
-		zlog("Server", "Shutting down gracefully...")
+		zlog.Log("Server", "Shutting down gracefully...")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			zlog.Err("Server", "Shutdown error: "+err.Error())
+		}
 	}()
 
 	return srv.ListenAndServe()
@@ -150,23 +180,11 @@ func URLParam(r *http.Request, key string) string {
 	return chi.URLParam(r, key)
 }
 
-// zlog prints a structured INFO log in Zenqo format.
-func zlog(label, msg string) {
-	ts := time.Now().Format("2006/01/02 15:04:05")
-	fmt.Fprintf(os.Stdout, "[Zenqo] %s  \033[32mLOG\033[0m  [%s]  %s\n", ts, label, msg)
-}
-
-// zerr prints a structured ERROR log in Zenqo format.
-func zerr(label, msg string) {
-	ts := time.Now().Format("2006/01/02 15:04:05")
-	fmt.Fprintf(os.Stderr, "[Zenqo] %s  \033[31mERR\033[0m  [%s]  %s\n", ts, label, msg)
-}
-
 // Zlog is the public logger for use inside modules and handlers.
-func Zlog(label, msg string) { zlog(label, msg) }
+func Zlog(label, msg string) { zlog.Log(label, msg) }
 
 // Zerr is the public error logger for use inside modules and handlers.
-func Zerr(label, msg string) { zerr(label, msg) }
+func Zerr(label, msg string) { zlog.Err(label, msg) }
 
 type chiAdapter struct{ r chi.Router }
 
