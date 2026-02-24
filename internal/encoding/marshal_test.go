@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	enc "github.com/ftery0/zenqo/internal/encoding"
+	enc "github.com/zenqos/zenqo/internal/encoding"
 )
 
 func TestToCamelCase(t *testing.T) {

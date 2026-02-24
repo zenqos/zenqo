@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/ftery0/zenqo/core"
-	"github.com/ftery0/zenqo/middleware"
+	"github.com/zenqos/zenqo/core"
+	"github.com/zenqos/zenqo/middleware"
 	"my-app/internal/config"
 	"my-app/internal/user"
 )

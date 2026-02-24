@@ -6,7 +6,7 @@ import (
 	"net"
 	"net/http"
 
-	zlog "github.com/ftery0/zenqo/internal/log"
+	zlog "github.com/zenqos/zenqo/internal/log"
 )
 
 // GuardToMiddleware converts a Guard into a standard MiddlewareFunc
