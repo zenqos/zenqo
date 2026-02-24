@@ -3,9 +3,10 @@ package core
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
+
+	zlog "github.com/ftery0/zenqo/internal/log"
 )
 
 // GuardToMiddleware converts a Guard into a standard MiddlewareFunc
@@ -15,7 +16,7 @@ func GuardToMiddleware(g Guard) MiddlewareFunc {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			allowed, err := g.CanActivate(r)
 			if err != nil {
-				log.Printf("[Zenqo] guard error: %v", err)
+				zlog.Err("Guard", err.Error())
 				JSON(w, 500, ErrorResponse{Code: 500, Message: "internal server error"})
 				return
 			}
@@ -47,7 +48,7 @@ func applyGuard(g Guard, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		allowed, err := g.CanActivate(r)
 		if err != nil {
-			log.Printf("[Zenqo] guard error: %v", err)
+			zlog.Err("Guard", err.Error())
 			JSON(w, 500, ErrorResponse{500, "internal server error"})
 			return
 		}

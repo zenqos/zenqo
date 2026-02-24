@@ -1,10 +1,10 @@
 package core
 
 import (
-	"bytes"
-	"encoding/json"
-	"log"
 	"net/http"
+
+	enc "github.com/ftery0/zenqo/internal/encoding"
+	zlog "github.com/ftery0/zenqo/internal/log"
 )
 
 // SuccessResponse is the standard envelope for successful responses.
@@ -36,13 +36,13 @@ type PaginationMeta struct {
 	PerPage int `json:"per_page"`
 }
 
-// JSON encodes data into a buffer first, then writes the response.
-// If encoding fails before headers are sent, a 500 is returned instead
-// of a partial JSON body.
+// JSON encodes data and writes the response.
+// Uses Zenqo's custom encoder — struct tags are optional,
+// PascalCase field names are automatically converted to camelCase.
 func JSON(w http.ResponseWriter, status int, data interface{}) {
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(data); err != nil {
-		log.Printf("[Zenqo] JSON encoding error: %v", err)
+	b, err := enc.Marshal(data)
+	if err != nil {
+		zlog.Err("JSON", err.Error())
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"code":500,"message":"internal server error"}`)) //nolint:errcheck
@@ -50,7 +50,7 @@ func JSON(w http.ResponseWriter, status int, data interface{}) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	buf.WriteTo(w) //nolint:errcheck // write errors are non-actionable after WriteHeader
+	w.Write(b) //nolint:errcheck
 }
 
 // OK sends a 200 response wrapped in SuccessResponse.
@@ -72,6 +72,19 @@ func NotFound(w http.ResponseWriter, msg string) { Error(w, 404, msg) }
 
 // InternalError sends a 500 error response.
 func InternalError(w http.ResponseWriter, msg string) { Error(w, 500, msg) }
+
+// ValidationErrorResponse is the envelope for validation failures.
+// Shape: { "code": 400, "message": "validation failed", "errors": [ { "field": "...", "message": "..." } ] }
+type ValidationErrorResponse struct {
+	Code    int          `json:"code"`
+	Message string       `json:"message"`
+	Errors  []FieldError `json:"errors"`
+}
+
+// ValidationFailed sends a 400 response with per-field validation errors.
+func ValidationFailed(w http.ResponseWriter, errs []FieldError) {
+	JSON(w, 400, ValidationErrorResponse{400, "validation failed", errs})
+}
 
 // Paginated sends a 200 response with list data and pagination metadata.
 func Paginated(w http.ResponseWriter, data interface{}, total, page, perPage int) {

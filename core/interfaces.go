@@ -45,5 +45,17 @@ type Interceptor interface {
 	After(ctx context.Context, w http.ResponseWriter, statusCode int)
 }
 
+// HandlerFunc is the Zenqo return-value handler signature.
+// Return (data, nil) for a successful response — the framework serializes it as JSON automatically.
+// Return (nil, core.ErrNotFound("msg")) to send an HTTP error with the correct status code.
+// Return (nil, nil) to send 204 No Content (useful for DELETE).
+//
+// Status code rules (applied automatically):
+//
+//	POST with data  → 201 Created
+//	data == nil     → 204 No Content
+//	everything else → 200 OK
+type HandlerFunc func(*http.Request) (any, error)
+
 // MiddlewareFunc is the standard net/http middleware signature.
 type MiddlewareFunc func(http.Handler) http.Handler

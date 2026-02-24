@@ -1,6 +1,13 @@
 package core
 
-import "net/http"
+import (
+	"errors"
+	"fmt"
+	"net/http"
+
+	chimw "github.com/go-chi/chi/v5/middleware"
+	zlog "github.com/ftery0/zenqo/internal/log"
+)
 
 // RouteDefinition holds the configuration for a single route,
 // including its HTTP method, path, handler, and any Guards,
@@ -77,28 +84,68 @@ func (bc *BaseController) UseControllerMiddleware(m ...MiddlewareFunc) {
 }
 
 // GET registers a GET route and returns a RouteDefinition for further configuration.
-func (bc *BaseController) GET(p string, h http.HandlerFunc) *RouteDefinition {
-	return bc.addRoute("GET", p, h)
+func (bc *BaseController) GET(p string, h HandlerFunc) *RouteDefinition {
+	return bc.addRoute("GET", p, adapt("GET", h))
 }
 
 // POST registers a POST route and returns a RouteDefinition for further configuration.
-func (bc *BaseController) POST(p string, h http.HandlerFunc) *RouteDefinition {
-	return bc.addRoute("POST", p, h)
+// Automatically responds with 201 Created when data is returned.
+func (bc *BaseController) POST(p string, h HandlerFunc) *RouteDefinition {
+	return bc.addRoute("POST", p, adapt("POST", h))
 }
 
 // PUT registers a PUT route and returns a RouteDefinition for further configuration.
-func (bc *BaseController) PUT(p string, h http.HandlerFunc) *RouteDefinition {
-	return bc.addRoute("PUT", p, h)
+func (bc *BaseController) PUT(p string, h HandlerFunc) *RouteDefinition {
+	return bc.addRoute("PUT", p, adapt("PUT", h))
 }
 
 // PATCH registers a PATCH route and returns a RouteDefinition for further configuration.
-func (bc *BaseController) PATCH(p string, h http.HandlerFunc) *RouteDefinition {
-	return bc.addRoute("PATCH", p, h)
+func (bc *BaseController) PATCH(p string, h HandlerFunc) *RouteDefinition {
+	return bc.addRoute("PATCH", p, adapt("PATCH", h))
 }
 
 // DELETE registers a DELETE route and returns a RouteDefinition for further configuration.
-func (bc *BaseController) DELETE(p string, h http.HandlerFunc) *RouteDefinition {
-	return bc.addRoute("DELETE", p, h)
+// Automatically responds with 204 No Content when nil is returned.
+func (bc *BaseController) DELETE(p string, h HandlerFunc) *RouteDefinition {
+	return bc.addRoute("DELETE", p, adapt("DELETE", h))
+}
+
+// Handle registers a raw net/http handler for cases that need full ResponseWriter control.
+func (bc *BaseController) Handle(method, path string, h http.HandlerFunc) *RouteDefinition {
+	return bc.addRoute(method, path, h)
+}
+
+// adapt converts a Zenqo HandlerFunc into a standard http.HandlerFunc.
+// It handles JSON serialization and HTTP error mapping automatically.
+func adapt(method string, h HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data, err := h(r)
+		if err != nil {
+			var ve *ValidationError
+			if errors.As(err, &ve) {
+				ValidationFailed(w, ve.Errors)
+				return
+			}
+			var he *HTTPError
+			if errors.As(err, &he) {
+				Error(w, he.Status, he.Message)
+			} else {
+				reqID := chimw.GetReqID(r.Context())
+				zlog.Err("Handler", fmt.Sprintf("[%s] %s %s — %v", reqID, r.Method, r.URL.Path, err))
+				InternalError(w, "internal server error")
+			}
+			return
+		}
+		if data == nil {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		status := http.StatusOK
+		if method == "POST" {
+			status = http.StatusCreated
+		}
+		JSON(w, status, SuccessResponse{true, data})
+	}
 }
 
 func (bc *BaseController) addRoute(method, path string, handler http.HandlerFunc) *RouteDefinition {

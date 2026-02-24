@@ -1,49 +1,51 @@
 package core
 
 import (
-	"log"
+	"context"
+	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
+	zlog "github.com/ftery0/zenqo/internal/log"
 )
 
 // App is the central application instance.
-// It wires modules together, applies global middleware and guards,
-// and starts the HTTP server.
 type App struct {
 	router       chi.Router
 	modules      []Module
+	controllers  []Controller
 	globalGuards []Guard
 	prefix       string
-	buildOnce    sync.Once // ensures routes are registered exactly once, even under concurrent access
+	buildOnce    sync.Once
+	root         BaseController
 }
 
-// NewApp creates a new App with sensible defaults:
-// RequestID, RealIP, Logger, and Recoverer middleware are pre-registered.
 func NewApp() *App {
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
-	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
-	return &App{router: r}
+	a := &App{router: r}
+	a.root.basePath = "/"
+	return a
 }
 
-// SetGlobalPrefix sets a URL prefix applied to all registered routes (e.g. "/api/v1").
 func (a *App) SetGlobalPrefix(prefix string) *App {
 	a.prefix = prefix
 	return a
 }
 
-// UseGlobalGuard registers Guards that run on every request, before any route-level guards.
 func (a *App) UseGlobalGuard(guards ...Guard) *App {
 	a.globalGuards = append(a.globalGuards, guards...)
 	return a
 }
 
-// Use registers raw middleware on the root router.
 func (a *App) Use(mws ...MiddlewareFunc) *App {
 	for _, mw := range mws {
 		a.router.Use(mw)
@@ -51,30 +53,59 @@ func (a *App) Use(mws ...MiddlewareFunc) *App {
 	return a
 }
 
-// UseModule registers one or more Modules and their Controllers with the application.
 func (a *App) UseModule(modules ...Module) *App {
-	for _, m := range modules {
-		a.modules = append(a.modules, m)
-		log.Printf("[Zenqo] Module registered: %s", m.Name())
-	}
+	a.modules = append(a.modules, modules...)
 	return a
 }
 
-// buildRoutes registers all routes exactly once.
-// sync.Once guarantees this is safe under concurrent access (e.g. parallel tests).
+// UseController registers one or more Controllers directly without a Module wrapper.
+// This is the recommended approach for most projects — no module.go needed.
+func (a *App) UseController(controllers ...Controller) *App {
+	a.controllers = append(a.controllers, controllers...)
+	return a
+}
+
+// GET registers a top-level GET route directly on the app.
+func (a *App) GET(path string, h HandlerFunc) *RouteDefinition { return a.root.GET(path, h) }
+
+// POST registers a top-level POST route directly on the app.
+func (a *App) POST(path string, h HandlerFunc) *RouteDefinition { return a.root.POST(path, h) }
+
+// PUT registers a top-level PUT route directly on the app.
+func (a *App) PUT(path string, h HandlerFunc) *RouteDefinition { return a.root.PUT(path, h) }
+
+// PATCH registers a top-level PATCH route directly on the app.
+func (a *App) PATCH(path string, h HandlerFunc) *RouteDefinition { return a.root.PATCH(path, h) }
+
+// DELETE registers a top-level DELETE route directly on the app.
+func (a *App) DELETE(path string, h HandlerFunc) *RouteDefinition { return a.root.DELETE(path, h) }
+
+// UseStatic serves files from dir under the given URL prefix.
+// Example: UseStatic("/", "./public") serves index.html, CSS, JS, etc.
+func (a *App) UseStatic(prefix, dir string) *App {
+	fs := http.FileServer(http.Dir(dir))
+	a.router.Handle(prefix, http.StripPrefix(prefix, fs))
+	a.router.Handle(prefix+"/*", http.StripPrefix(prefix, fs))
+	return a
+}
+
 func (a *App) buildRoutes() {
 	a.buildOnce.Do(func() {
 		for _, g := range a.globalGuards {
 			a.router.Use(GuardToMiddleware(g))
 		}
-
 		mount := func(cr chi.Router) {
 			r := newChiAdapter(cr)
 			for _, m := range a.modules {
 				for _, c := range m.Controllers() {
 					c.RegisterRoutes(r)
-					log.Printf("[Zenqo]   → Controller: %s%s", a.prefix, c.BasePath())
 				}
+			}
+			for _, c := range a.controllers {
+				c.RegisterRoutes(r)
+			}
+			if len(a.root.routes) > 0 {
+				a.root.RegisterRoutes(r)
 			}
 		}
 		if a.prefix != "" {
@@ -85,50 +116,79 @@ func (a *App) buildRoutes() {
 	})
 }
 
-// Start builds all routes and starts the HTTP server on the given address (e.g. ":3000").
 func (a *App) Start(addr string) error {
+	started := time.Now()
 	a.buildRoutes()
 
-	totalRoutes := 0
-	chi.Walk(a.router, func(_, _ string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		totalRoutes++
-		return nil
-	})
-	if totalRoutes == 0 {
-		log.Printf("[Zenqo] WARNING: no routes registered — did you forget to call UseModule?")
+	zlog.Log("Boot", "Starting application...")
+
+	if len(a.modules) == 0 && len(a.controllers) == 0 && len(a.root.routes) == 0 {
+		zlog.Log("App", "Ready — add controllers in internal/app/app.go")
 	}
 
-	log.Printf("[Zenqo] Modules  : %d", len(a.modules))
 	for _, m := range a.modules {
-		log.Printf("[Zenqo]   📦 %s (%d controllers)", m.Name(), len(m.Controllers()))
+		zlog.Log("Module", m.Name()+" initialized")
 	}
+	for _, c := range a.controllers {
+		zlog.Log("Controller", c.BasePath()+" registered")
+	}
+
 	chi.Walk(a.router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		log.Printf("[Zenqo] Route    : %-6s %s", method, route)
+		zlog.Log("Router", fmt.Sprintf("%-6s %s", method, route))
 		return nil
 	})
-	log.Printf("[Zenqo] Listening on %s", addr)
 
-	return http.ListenAndServe(addr, a.router)
+	host := addr
+	if len(host) > 0 && host[0] == ':' {
+		host = "http://localhost" + host
+	}
+	elapsed := time.Since(started).Milliseconds()
+	zlog.Log("Server", fmt.Sprintf("Listening on %s  +%dms", host, elapsed))
+
+	a.router.Use(chimw.Logger)
+
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      a.router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	go func() {
+		quit := make(chan os.Signal, 1)
+		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+		<-quit
+		zlog.Log("Server", "Shutting down gracefully...")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			zlog.Err("Server", "Shutdown error: "+err.Error())
+		}
+	}()
+
+	return srv.ListenAndServe()
 }
 
-// Handler builds all routes and returns the underlying http.Handler.
-// Intended for use with httptest in unit and integration tests.
-// Safe to call multiple times — routes are only registered once.
 func (a *App) Handler() http.Handler {
 	a.buildRoutes()
 	return a.router
 }
 
-// chiAdapter wraps chi.Router to implement the public Router interface.
-// This keeps chi as an internal implementation detail — framework users
-// never import or interact with chi directly.
-type chiAdapter struct {
-	r chi.Router
+// URLParam extracts a named URL parameter set by the chi router.
+func URLParam(r *http.Request, key string) string {
+	return chi.URLParam(r, key)
 }
 
-func newChiAdapter(r chi.Router) Router {
-	return &chiAdapter{r: r}
-}
+// Zlog is the public logger for use inside modules and handlers.
+func Zlog(label, msg string) { zlog.Log(label, msg) }
+
+// Zerr is the public error logger for use inside modules and handlers.
+func Zerr(label, msg string) { zlog.Err(label, msg) }
+
+type chiAdapter struct{ r chi.Router }
+
+func newChiAdapter(r chi.Router) Router { return &chiAdapter{r: r} }
 
 func (a *chiAdapter) Get(path string, h http.HandlerFunc)    { a.r.Get(path, h) }
 func (a *chiAdapter) Post(path string, h http.HandlerFunc)   { a.r.Post(path, h) }

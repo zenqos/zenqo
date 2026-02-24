@@ -1,0 +1,12 @@
+# Binaries
+*.exe
+*.out
+/bin/
+
+# Go
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
