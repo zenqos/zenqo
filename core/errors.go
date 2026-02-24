@@ -1,5 +1,14 @@
 package core
 
+import (
+	"errors"
+	"fmt"
+	"net/http"
+
+	chimw "github.com/go-chi/chi/v5/middleware"
+	zlog "github.com/zenqos/zenqo/internal/log"
+)
+
 // HTTPError carries an HTTP status code and message.
 // Return it from a HandlerFunc to send a specific HTTP error response.
 //
@@ -37,4 +46,29 @@ func (e *ValidationError) Error() string { return "validation failed" }
 // ErrValidation creates a ValidationError from one or more FieldErrors.
 func ErrValidation(errs ...FieldError) error {
 	return &ValidationError{Errors: errs}
+}
+
+// ErrorHandlerFunc handles errors returned by HandlerFuncs.
+// Register a custom one with app.SetErrorHandler() to override the default behavior.
+// Call DefaultErrorHandler(w, r, err) inside your implementation to fall back to Zenqo's built-in logic.
+type ErrorHandlerFunc func(w http.ResponseWriter, r *http.Request, err error)
+
+// DefaultErrorHandler is Zenqo's built-in error handler used by adapt().
+//   - *ValidationError → 400 with per-field error list
+//   - *HTTPError       → matching HTTP status
+//   - everything else  → 500 with the request ID logged
+func DefaultErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
+	var ve *ValidationError
+	if errors.As(err, &ve) {
+		ValidationFailed(w, ve.Errors)
+		return
+	}
+	var he *HTTPError
+	if errors.As(err, &he) {
+		Error(w, he.Status, he.Message)
+		return
+	}
+	reqID := chimw.GetReqID(r.Context())
+	zlog.Err("Handler", fmt.Sprintf("[%s] %s %s — %v", reqID, r.Method, r.URL.Path, err))
+	InternalError(w, "internal server error")
 }

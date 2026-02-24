@@ -1,4 +1,4 @@
-module github.com/ftery0/zenqo
+module github.com/zenqos/zenqo
 
 go 1.23
 

@@ -12,7 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
-	zlog "github.com/ftery0/zenqo/internal/log"
+	zlog "github.com/zenqos/zenqo/internal/log"
 )
 
 // App is the central application instance.
@@ -24,15 +24,36 @@ type App struct {
 	prefix       string
 	buildOnce    sync.Once
 	root         BaseController
+	errorHandler ErrorHandlerFunc
+}
+
+// errorHandlerSetter is satisfied by any Controller that embeds BaseController.
+// App.buildRoutes() uses it to propagate the configured error handler.
+type errorHandlerSetter interface {
+	setErrorHandler(ErrorHandlerFunc)
 }
 
 func NewApp() *App {
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
-	r.Use(chimw.Recoverer)
+	r.Use(zenqoRecoverer)
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		Error(w, 404, "not found")
+	})
+	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		Error(w, 405, "method not allowed")
+	})
 	a := &App{router: r}
 	a.root.basePath = "/"
+	return a
+}
+
+// SetErrorHandler overrides Zenqo's default error handler for all routes.
+// The handler receives (w, r, err) for every error returned by a HandlerFunc.
+// Call DefaultErrorHandler(w, r, err) inside your implementation to fall back to built-in behavior.
+func (a *App) SetErrorHandler(fn ErrorHandlerFunc) *App {
+	a.errorHandler = fn
 	return a
 }
 
@@ -91,6 +112,26 @@ func (a *App) UseStatic(prefix, dir string) *App {
 
 func (a *App) buildRoutes() {
 	a.buildOnce.Do(func() {
+		// Resolve the effective error handler and propagate to all controllers
+		// before RegisterRoutes is called so every route gets the right handler.
+		errHandler := a.errorHandler
+		if errHandler == nil {
+			errHandler = DefaultErrorHandler
+		}
+		a.root.errHandler = errHandler
+		for _, c := range a.controllers {
+			if s, ok := c.(errorHandlerSetter); ok {
+				s.setErrorHandler(errHandler)
+			}
+		}
+		for _, m := range a.modules {
+			for _, c := range m.Controllers() {
+				if s, ok := c.(errorHandlerSetter); ok {
+					s.setErrorHandler(errHandler)
+				}
+			}
+		}
+
 		for _, g := range a.globalGuards {
 			a.router.Use(GuardToMiddleware(g))
 		}

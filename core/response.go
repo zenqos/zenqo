@@ -3,8 +3,8 @@ package core
 import (
 	"net/http"
 
-	enc "github.com/ftery0/zenqo/internal/encoding"
-	zlog "github.com/ftery0/zenqo/internal/log"
+	enc "github.com/zenqos/zenqo/internal/encoding"
+	zlog "github.com/zenqos/zenqo/internal/log"
 )
 
 // SuccessResponse is the standard envelope for successful responses.
@@ -14,11 +14,13 @@ type SuccessResponse struct {
 	Data    interface{} `json:"data"`
 }
 
-// ErrorResponse is the standard envelope for error responses.
+// ErrorResponse is the standard envelope for all error responses.
 // Shape: { "code": <status>, "message": "<reason>" }
+// Validation errors include an "errors" array: { "code": 400, "message": "...", "errors": [...] }
 type ErrorResponse struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int          `json:"code"`
+	Message string       `json:"message"`
+	Errors  []FieldError `json:"errors,omitempty"`
 }
 
 // PaginatedResponse wraps a list payload with pagination metadata.
@@ -61,7 +63,7 @@ func Created(w http.ResponseWriter, data interface{}) { JSON(w, 201, SuccessResp
 
 // Error sends an error response with the given status code and message.
 func Error(w http.ResponseWriter, status int, msg string) {
-	JSON(w, status, ErrorResponse{status, msg})
+	JSON(w, status, ErrorResponse{Code: status, Message: msg})
 }
 
 // BadRequest sends a 400 error response.
@@ -73,17 +75,9 @@ func NotFound(w http.ResponseWriter, msg string) { Error(w, 404, msg) }
 // InternalError sends a 500 error response.
 func InternalError(w http.ResponseWriter, msg string) { Error(w, 500, msg) }
 
-// ValidationErrorResponse is the envelope for validation failures.
-// Shape: { "code": 400, "message": "validation failed", "errors": [ { "field": "...", "message": "..." } ] }
-type ValidationErrorResponse struct {
-	Code    int          `json:"code"`
-	Message string       `json:"message"`
-	Errors  []FieldError `json:"errors"`
-}
-
 // ValidationFailed sends a 400 response with per-field validation errors.
 func ValidationFailed(w http.ResponseWriter, errs []FieldError) {
-	JSON(w, 400, ValidationErrorResponse{400, "validation failed", errs})
+	JSON(w, 400, ErrorResponse{Code: 400, Message: "validation failed", Errors: errs})
 }
 
 // Paginated sends a 200 response with list data and pagination metadata.
