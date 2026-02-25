@@ -5,6 +5,7 @@
 <p align="center">A return-value-based <a href="https://go.dev" target="_blank">Go</a> web framework for building clean, scalable server-side applications.</p>
 
 <p align="center">
+  <a href="https://github.com/zenqos/zenqo/actions/workflows/ci.yml"><img src="https://github.com/zenqos/zenqo/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://pkg.go.dev/github.com/zenqos/zenqo"><img src="https://pkg.go.dev/badge/github.com/zenqos/zenqo.svg" alt="Go Reference" /></a>
   <a href="https://goreportcard.com/report/github.com/zenqos/zenqo"><img src="https://goreportcard.com/badge/github.com/zenqos/zenqo" alt="Go Report Card" /></a>
   <a href="https://github.com/zenqos/zenqo/blob/main/LICENSE"><img src="https://img.shields.io/github/license/zenqos/zenqo" alt="License" /></a>
@@ -107,10 +108,20 @@ curl http://localhost:3000/
 
 - [`examples/basic`](./examples/basic) — Direct routing without controllers
 - [`examples/crud`](./examples/crud) — Full CRUD API with Controller + Service pattern
+- [`examples/auth`](./examples/auth) — JWT authentication with Guards, Interceptors, and Bind+Validation
 
 ## Documentation
 
-See the [CHANGELOG](./CHANGELOG.md) for a detailed feature breakdown.
+- [CHANGELOG](./CHANGELOG.md) — detailed feature breakdown and version history
+- [pkg.go.dev](https://pkg.go.dev/github.com/zenqos/zenqo) — API reference (GoDoc)
+
+## Contributing
+
+We welcome contributions! Please read the [Contributing Guide](CONTRIBUTING.md) before submitting a Pull Request.
+
+## Security
+
+If you discover a security vulnerability, **do not open a public issue**. Please follow the instructions in our [Security Policy](SECURITY.md).
 
 ## Stay in Touch
 
