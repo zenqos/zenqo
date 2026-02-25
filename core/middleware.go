@@ -11,17 +11,18 @@ import (
 
 // GuardToMiddleware converts a Guard into a standard MiddlewareFunc
 // so it can be applied at the router or controller level.
+//
+// Status code logic:
+//   - (true, _)            → next handler runs
+//   - (false, *HTTPError)  → responds with the HTTPError's Status and Message
+//   - (false, nil)         → 403 Forbidden
+//   - (false, other error) → 500 Internal Server Error
 func GuardToMiddleware(g Guard) MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			allowed, err := g.CanActivate(r)
-			if err != nil {
-				zlog.Err("Guard", err.Error())
-				JSON(w, 500, ErrorResponse{Code: 500, Message: "internal server error"})
-				return
-			}
 			if !allowed {
-				JSON(w, 403, ErrorResponse{Code: 403, Message: "access denied"})
+				guardReject(w, err)
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -47,17 +48,26 @@ func InterceptorToMiddleware(i Interceptor) MiddlewareFunc {
 func applyGuard(g Guard, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		allowed, err := g.CanActivate(r)
-		if err != nil {
-			zlog.Err("Guard", err.Error())
-			JSON(w, 500, ErrorResponse{Code: 500, Message: "internal server error"})
-			return
-		}
 		if !allowed {
-			JSON(w, 403, ErrorResponse{Code: 403, Message: "access denied"})
+			guardReject(w, err)
 			return
 		}
 		next(w, r)
 	}
+}
+
+// guardReject writes the appropriate error response when a Guard denies access.
+func guardReject(w http.ResponseWriter, err error) {
+	if err != nil {
+		if he, ok := err.(*HTTPError); ok {
+			JSON(w, he.Status, ErrorResponse{Code: he.Status, Message: he.Message})
+			return
+		}
+		zlog.Err("Guard", err.Error())
+		JSON(w, 500, ErrorResponse{Code: 500, Message: "internal server error"})
+		return
+	}
+	JSON(w, 403, ErrorResponse{Code: 403, Message: "access denied"})
 }
 
 // applyInterceptor wraps a single HandlerFunc with Interceptor logic at the route level.

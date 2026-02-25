@@ -33,7 +33,12 @@ type Controller interface {
 }
 
 // Guard controls access to a route before the handler is invoked.
-// Return (false, nil) to respond with 403, or (false, err) for 500.
+//
+// Return values:
+//   - (true, _)            → request proceeds to the handler
+//   - (false, *HTTPError)  → responds with the HTTPError's Status and Message (e.g. 401, 429)
+//   - (false, nil)         → 403 Forbidden
+//   - (false, other error) → 500 Internal Server Error
 type Guard interface {
 	CanActivate(r *http.Request) (bool, error)
 }
