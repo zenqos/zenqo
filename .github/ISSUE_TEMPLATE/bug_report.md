@@ -1,8 +1,8 @@
 ---
 name: Bug Report
 about: Report a bug to help us improve Zenqo
-title: ""
-labels: bug
+title: "[Bug] "
+labels: bug, needs triage
 assignees: ""
 ---
 
@@ -20,19 +20,31 @@ Steps to reproduce the behavior:
 
 ## Expected Behavior
 
-A clear and concise description of what you expected to happen.
+What you expected to happen.
+
+## Actual Behavior
+
+What actually happened. Include error messages or stack traces if available.
 
 ## Code Sample
 
 ```go
 // Minimal reproducible example
+package main
+
+import "github.com/zenqos/zenqo/core"
+
+func main() {
+    app := core.NewApp()
+    // ...
+}
 ```
 
 ## Environment
 
 - Go version: [e.g. 1.23]
-- Zenqo version: [e.g. v0.1.0]
-- OS: [e.g. macOS, Linux, Windows]
+- Zenqo version: [e.g. v0.0.1]
+- OS: [e.g. macOS 14, Ubuntu 22.04, Windows 11]
 
 ## Additional Context
 
