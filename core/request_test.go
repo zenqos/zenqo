@@ -97,3 +97,92 @@ func TestParamNegativeUint(t *testing.T) {
 		t.Fatal("expected error for negative uint param")
 	}
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// BindQuery edge cases
+// ────────────────────────────────────────────────────────────────────────────
+
+func TestBindQueryPresent(t *testing.T) {
+		r, _ := http.NewRequest("GET", "/?page=3", nil)
+		v := BindQuery(r, "page")
+		if v != "3" {
+					t.Fatalf("expected \"3\", got %q", v)
+				}
+}
+
+func TestBindQueryMissing(t *testing.T) {
+		r, _ := http.NewRequest("GET", "/", nil)
+		v := BindQuery(r, "page")
+		if v != "" {
+					t.Fatalf("expected empty string for missing key, got %q", v)
+				}
+}
+
+func TestBindQueryEmpty(t *testing.T) {
+		r, _ := http.NewRequest("GET", "/?page=", nil)
+		v := BindQuery(r, "page")
+		if v != "" {
+					t.Fatalf("expected empty string for empty value, got %q", v)
+				}
+}
+
+func TestBindQueryMultipleValues(t *testing.T) {
+		// net/url.Values.Get returns the first value when a key appears multiple times.
+		r, _ := http.NewRequest("GET", "/?tag=go&tag=http", nil)
+		v := BindQuery(r, "tag")
+		if v != "go" {
+					t.Fatalf("expected first value \"go\", got %q", v)
+				}
+}
+
+func TestBindQuerySpecialChars(t *testing.T) {
+		r, _ := http.NewRequest("GET", "/?q=hello+world&filter=a%26b", nil)
+		q := BindQuery(r, "q")
+		if q != "hello world" {
+					t.Fatalf("expected \"hello world\", got %q", q)
+				}
+		f := BindQuery(r, "filter")
+		if f != "a&b" {
+					t.Fatalf("expected \"a&b\", got %q", f)
+				}
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// BindHeader edge cases
+// ────────────────────────────────────────────────────────────────────────────
+
+func TestBindHeaderPresent(t *testing.T) {
+		r, _ := http.NewRequest("GET", "/", nil)
+		r.Header.Set("Authorization", "Bearer token123")
+		v := BindHeader(r, "Authorization")
+		if v != "Bearer token123" {
+					t.Fatalf("expected \"Bearer token123\", got %q", v)
+				}
+}
+
+func TestBindHeaderMissing(t *testing.T) {
+		r, _ := http.NewRequest("GET", "/", nil)
+		v := BindHeader(r, "Authorization")
+		if v != "" {
+					t.Fatalf("expected empty string for missing header, got %q", v)
+				}
+}
+
+func TestBindHeaderEmpty(t *testing.T) {
+		r, _ := http.NewRequest("GET", "/", nil)
+		r.Header.Set("X-Custom", "")
+		v := BindHeader(r, "X-Custom")
+		if v != "" {
+					t.Fatalf("expected empty string for empty header value, got %q", v)
+				}
+}
+
+func TestBindHeaderCaseInsensitive(t *testing.T) {
+		// Go's http.Header.Get canonicalises the key, making lookup case-insensitive.
+		r, _ := http.NewRequest("GET", "/", nil)
+		r.Header.Set("content-type", "application/json")
+		v := BindHeader(r, "Content-Type")
+		if v != "application/json" {
+					t.Fatalf("expected \"application/json\", got %q", v)
+				}
+}
