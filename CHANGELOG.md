@@ -2,6 +2,116 @@
 
 ## Unreleased
 
+### 10. Guard Interface Improvement
+
+Guards can now return custom HTTP status codes instead of only 403.
+
+**Updated `core/middleware.go`:**
+- New `guardReject()` helper centralizes Guard denial logic
+- `GuardToMiddleware()` and `applyGuard()` now check `*HTTPError` type:
+  - `(false, *HTTPError)` → responds with the HTTPError's status and message (e.g. 401, 429)
+  - `(false, nil)` → 403 Forbidden (unchanged)
+  - `(false, other error)` → 500 Internal Server Error (unchanged)
+- **Backward compatible** — no interface changes, existing Guards work as before
+
+```go
+// Before: Guards could only return 403
+func (g *AuthGuard) CanActivate(r *http.Request) (bool, error) {
+    return false, nil // always 403
+}
+
+// After: Guards can return any HTTP status
+func (g *AuthGuard) CanActivate(r *http.Request) (bool, error) {
+    return false, core.ErrUnauthorized("invalid token") // 401
+}
+```
+
+---
+
+### 11. Extended Validation Rules
+
+Added 12 new validation rules to `core/rules.go`, bringing the total to 17.
+
+| Rule | Example | Behavior |
+|------|---------|----------|
+| `url` | `validate:"url"` | Must be a valid URL (http/https/ftp) |
+| `uuid` | `validate:"uuid"` | Must be a valid UUID format |
+| `alpha` | `validate:"alpha"` | Letters only |
+| `alphanum` | `validate:"alphanum"` | Letters and numbers only |
+| `numeric` | `validate:"numeric"` | Digit characters only |
+| `len=N` | `validate:"len=10"` | Exact length (strings, slices, maps) |
+| `regex=PATTERN` | `validate:"regex=^[a-z]+$"` | Must match regex pattern |
+| `contains=STR` | `validate:"contains=@"` | Must contain substring |
+| `startswith=STR` | `validate:"startswith=http"` | Must start with prefix |
+| `endswith=STR` | `validate:"endswith=.com"` | Must end with suffix |
+| `lowercase` | `validate:"lowercase"` | Must be all lowercase |
+| `uppercase` | `validate:"uppercase"` | Must be all uppercase |
+
+New test file: `core/rules_test.go` — success/failure tests for all 12 rules.
+
+---
+
+### 12. Comprehensive Core Tests
+
+New test files covering all core logic that previously had no tests:
+
+| File | Tests |
+|------|-------|
+| `core/controller_test.go` | `adapt()` (GET/POST/nil/error), `RegisterRoutes` (controller guard, route-level guard), `SetBasePath` panics |
+| `core/middleware_test.go` | `GuardToMiddleware` (allow, deny nil, deny HTTPError 401/429), `InterceptorToMiddleware` (Before/After, context propagation), `statusWriter` (WriteHeader, Flush, Hijack) |
+| `core/errors_test.go` | `DefaultErrorHandler` (ValidationError, HTTPError, generic error), error helper constructors |
+| `core/app_test.go` | Full integration: GET/POST/PUT/PATCH/DELETE routes, GlobalPrefix, Module registration, Global Guard, 404/405 JSON, `Bind` integration (valid JSON, wrong Content-Type, body too large, validation failure, invalid JSON), custom error handler |
+| `core/recover_test.go` | Panic recovery → 500 JSON, `http.ErrAbortHandler` re-panic, no-panic passthrough |
+
+---
+
+### 13. Benchmarks
+
+New file: `core/benchmark_test.go`
+
+Run with `go test -bench=. -benchmem ./core/`
+
+| Benchmark | What it measures |
+|-----------|-----------------|
+| `BenchmarkChiRawHandler` vs `BenchmarkZenqoAdapt` | Framework overhead per request |
+| `BenchmarkStdJSONMarshal` vs `BenchmarkZenqoMarshal` | Custom encoder vs encoding/json |
+| `BenchmarkValidatePass` / `BenchmarkValidateFail` | Struct validation speed |
+| `BenchmarkGuardAllow` / `BenchmarkGuardDeny` / `BenchmarkGuardChain3` | Guard middleware overhead |
+
+---
+
+### 14. JWT Authentication Example
+
+New example: `examples/auth/` — demonstrates real-world JWT authentication.
+
+**Features demonstrated:**
+- `JWTGuard` — Guard returning 401 Unauthorized (improved Guard interface)
+- Controller-level Guard — all user routes protected
+- `LogInterceptor` — request/response logging via Interceptor
+- `Bind[T]` + validation — DTO decoding with struct tag validation
+- Full auth flow — register, login, protected CRUD
+
+**Structure:**
+```
+examples/auth/
+├── main.go
+├── go.mod
+├── .gitignore
+└── internal/
+    ├── app/app.go          # Wiring with adapter pattern
+    ├── config/config.go
+    ├── auth/
+    │   ├── guard.go        # JWTGuard
+    │   ├── handler.go      # Login/Register
+    │   ├── jwt.go          # Token generation/parsing
+    │   └── dto.go          # LoginDTO, RegisterDTO
+    └── user/
+        ├── handler.go      # Protected user CRUD
+        └── service.go      # In-memory store
+```
+
+---
+
 ### 1. ValidationError Type & Field-Level Error Response
 
 Added structured validation error support so that API consumers receive per-field error details instead of a generic 400 message.

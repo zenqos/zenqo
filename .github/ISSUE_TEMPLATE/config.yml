@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://pkg.go.dev/github.com/zenqos/zenqo
+    about: Read the full API documentation on pkg.go.dev
+  - name: Discussions
+    url: https://github.com/zenqos/zenqo/discussions
+    about: Ask questions and share ideas in Discussions

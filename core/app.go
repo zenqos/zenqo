@@ -33,6 +33,8 @@ type errorHandlerSetter interface {
 	setErrorHandler(ErrorHandlerFunc)
 }
 
+// NewApp creates a new Zenqo application with sensible defaults:
+// request ID injection, real-IP resolution, panic recovery, and JSON 404/405 responses.
 func NewApp() *App {
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
@@ -211,6 +213,8 @@ func (a *App) Start(addr string) error {
 	return srv.ListenAndServe()
 }
 
+// Handler builds all routes and returns the underlying http.Handler.
+// Use this for testing with httptest or for mounting Zenqo inside another server.
 func (a *App) Handler() http.Handler {
 	a.buildRoutes()
 	return a.router
