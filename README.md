@@ -117,24 +117,9 @@ curl http://localhost:3000/
 
 ## Contributors
 
-Thanks goes to these wonderful people:
-
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-<table>
-  <tbody>
-    <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/ftery0"><img src="https://avatars.githubusercontent.com/u/127281057?v=4" width="80px;" alt="ftery0"/><br /><sub><b>ftery0</b></sub></a><br /><a href="https://github.com/zenqos/zenqo/commits?author=ftery0" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="http://roguetex.github.io"><img src="https://avatars.githubusercontent.com/u/218665445?v=4?s=80" width="80px;" alt="Raghu :)"/><br /><sub><b>Raghu :)</b></sub></a><br /><a href="https://github.com/zenqos/zenqo/commits?author=RogueTex" title="Code">💻</a></td>
-    </tr>
-  </tbody>
-</table>
-
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
+<a href="https://github.com/zenqos/zenqo/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=zenqos/zenqo" />
+</a>
 
 ## Contributing
 
