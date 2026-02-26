@@ -25,7 +25,7 @@ type App struct {
 	buildOnce    sync.Once
 	root         BaseController
 	errorHandler ErrorHandlerFunc
-		shutdownTimeout time.Duration
+	shutdownTimeout time.Duration
 }
 
 // errorHandlerSetter is satisfied by any Controller that embeds BaseController.
@@ -262,4 +262,5 @@ func (a *chiAdapter) Group(path string, fn func(r Router)) {
 		fn(newChiAdapter(cr))
 	})
 }
+
 
