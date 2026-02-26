@@ -48,7 +48,7 @@ func NewApp() *App {
 		Error(w, 405, "method not allowed")
 	})
 	a := &App{router: r}
-		a.shutdownTimeout = 30 * time.Second
+	a.shutdownTimeout = 30 * time.Second
 	a.root.basePath = "/"
 	return a
 }
@@ -70,8 +70,8 @@ func (a *App) SetGlobalPrefix(prefix string) *App {
 // to complete when the server receives SIGINT or SIGTERM.
 // Default is 30 seconds.
 func (a *App) SetShutdownTimeout(d time.Duration) *App {
-		a.shutdownTimeout = d
-		return a
+	a.shutdownTimeout = d
+	return a
 }
 
 func (a *App) UseGlobalGuard(guards ...Guard) *App {
@@ -262,5 +262,3 @@ func (a *chiAdapter) Group(path string, fn func(r Router)) {
 		fn(newChiAdapter(cr))
 	})
 }
-
-
