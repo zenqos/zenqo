@@ -16,11 +16,12 @@
 - [ ] Documentation
 - [ ] Other — please describe:
 
-## Current Behavior
+## Related Issue
 
-<!-- Describe the current behavior, or link to a relevant issue. -->
+<!-- Link the issue this PR resolves. GitHub will auto-close it on merge. -->
+<!-- Example: Closes #9 -->
 
-Issue: N/A
+Closes #
 
 ## New Behavior
 
