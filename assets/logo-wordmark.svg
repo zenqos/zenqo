@@ -1,0 +1,19 @@
+<svg width="260" height="64" viewBox="0 0 260 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="10%" y1="10%" x2="90%" y2="90%">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="gt" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#818CF8"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="#0D1117"/>
+  <path d="M 13,14 L 51,14 L 51,22 L 28,42 L 51,42 L 51,50 L 13,50 L 13,42 L 36,22 L 13,22 Z"
+    fill="url(#g)" stroke="url(#g)" stroke-width="4.5" stroke-linejoin="round"/>
+  <text x="80" y="43"
+    font-family="'Space Grotesk', system-ui, -apple-system, sans-serif"
+    font-weight="600" font-size="32" letter-spacing="-0.5"
+    fill="url(#gt)">Zenqo</text>
+</svg>

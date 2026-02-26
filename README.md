@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Zenqo-Framework-blue?style=for-the-badge&labelColor=000000" alt="Zenqo" />
+  <img src="./assets/logo-wordmark.svg" alt="Zenqo" width="260" />
 </p>
 
 <p align="center">A return-value-based <a href="https://go.dev" target="_blank">Go</a> web framework for building clean, scalable server-side applications.</p>
