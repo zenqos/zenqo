@@ -84,3 +84,52 @@ func ValidationFailed(w http.ResponseWriter, errs []FieldError) {
 func Paginated(w http.ResponseWriter, data interface{}, total, page, perPage int) {
 	JSON(w, 200, PaginatedResponse{true, data, PaginationMeta{total, page, perPage}})
 }
+
+
+// Text writes a plain-text response with the given status code.
+// It sets Content-Type: text/plain; charset=utf-8.
+//
+// Example:
+//
+//	return core.Text(w, 200, "hello")
+func Text(w http.ResponseWriter, status int, body string) error {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(status)
+		_, err := fmt.Fprint(w, body)
+		return err
+}
+
+// HTML writes an HTML response with the given status code.
+// It sets Content-Type: text/html; charset=utf-8.
+//
+// Example:
+//
+//	return core.HTML(w, 200, "<h1>Hello</h1>")
+func HTML(w http.ResponseWriter, status int, body string) error {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(status)
+		_, err := fmt.Fprint(w, body)
+		return err
+}
+
+// Redirect sends an HTTP redirect to the target URL.
+// The status should be a 3xx code such as http.StatusFound (302)
+// or http.StatusMovedPermanently (301).
+//
+// Example:
+//
+//	return core.Redirect(w, r, "/login", http.StatusFound)
+func Redirect(w http.ResponseWriter, r *http.Request, url string, status int) error {
+		http.Redirect(w, r, url, status)
+		return nil
+}
+
+// NoContent sends a 204 No Content response with no body.
+//
+// Example:
+//
+//	return core.NoContent(w)
+func NoContent(w http.ResponseWriter) error {
+		w.WriteHeader(http.StatusNoContent)
+		return nil
+}
