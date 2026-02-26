@@ -3,7 +3,9 @@
   "projectOwner": "zenqos",
   "repoType": "github",
   "repoHost": "https://github.com",
-  "files": ["README.md"],
+  "files": [
+    "README.md"
+  ],
   "imageSize": 80,
   "commit": false,
   "contributorsPerLine": 7,
@@ -14,7 +16,20 @@
       "name": "ftery0",
       "avatar_url": "https://avatars.githubusercontent.com/u/ftery0",
       "profile": "https://github.com/ftery0",
-      "contributions": ["code"]
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "RogueTex",
+      "name": "Raghu :)",
+      "avatar_url": "https://avatars.githubusercontent.com/u/218665445?v=4",
+      "profile": "http://roguetex.github.io",
+      "contributions": [
+        "code"
+      ]
     }
-  ]
+  ],
+  "commitType": "docs",
+  "commitConvention": "angular"
 }
