@@ -1,0 +1,20 @@
+{
+  "projectName": "zenqo",
+  "projectOwner": "zenqos",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": ["README.md"],
+  "imageSize": 80,
+  "commit": false,
+  "contributorsPerLine": 7,
+  "skipCi": true,
+  "contributors": [
+    {
+      "login": "ftery0",
+      "name": "ftery0",
+      "avatar_url": "https://avatars.githubusercontent.com/u/ftery0",
+      "profile": "https://github.com/ftery0",
+      "contributions": ["code"]
+    }
+  ]
+}

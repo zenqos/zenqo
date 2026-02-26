@@ -115,6 +115,30 @@ curl http://localhost:3000/
 - [CHANGELOG](./CHANGELOG.md) — detailed feature breakdown and version history
 - [pkg.go.dev](https://pkg.go.dev/github.com/zenqos/zenqo) — API reference (GoDoc)
 
+## Contributors
+
+Thanks goes to these wonderful people:
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%">
+        <a href="https://github.com/ftery0">
+          <img src="https://github.com/ftery0.png" width="80px;" alt="ftery0"/><br />
+          <sub><b>ftery0</b></sub>
+        </a><br />
+        <a title="Code">💻</a>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
 ## Contributing
 
 We welcome contributions! Please read the [Contributing Guide](CONTRIBUTING.md) before submitting a Pull Request.
