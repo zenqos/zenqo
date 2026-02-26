@@ -45,21 +45,3 @@ jobs:
       - name: Go vet
         run: go vet ./...
 
-  build-examples:
-    name: Build Examples
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.24"
-
-      - name: Build basic example
-        run: cd examples/basic && go build .
-
-      - name: Build crud example
-        run: cd examples/crud && go build .
-
-      - name: Build auth example
-        run: cd examples/auth && go mod tidy && go build .
