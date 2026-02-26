@@ -25,6 +25,7 @@ type App struct {
 	buildOnce    sync.Once
 	root         BaseController
 	errorHandler ErrorHandlerFunc
+	shutdownTimeout time.Duration
 }
 
 // errorHandlerSetter is satisfied by any Controller that embeds BaseController.
@@ -47,6 +48,7 @@ func NewApp() *App {
 		Error(w, 405, "method not allowed")
 	})
 	a := &App{router: r}
+	a.shutdownTimeout = 30 * time.Second
 	a.root.basePath = "/"
 	return a
 }
@@ -61,6 +63,14 @@ func (a *App) SetErrorHandler(fn ErrorHandlerFunc) *App {
 
 func (a *App) SetGlobalPrefix(prefix string) *App {
 	a.prefix = prefix
+	return a
+}
+
+// SetShutdownTimeout sets the maximum duration to wait for in-flight requests
+// to complete when the server receives SIGINT or SIGTERM.
+// Default is 30 seconds.
+func (a *App) SetShutdownTimeout(d time.Duration) *App {
+	a.shutdownTimeout = d
 	return a
 }
 
@@ -203,7 +213,7 @@ func (a *App) Start(addr string) error {
 		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 		<-quit
 		zlog.Log("Server", "Shutting down gracefully...")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), a.shutdownTimeout)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
 			zlog.Err("Server", "Shutdown error: "+err.Error())

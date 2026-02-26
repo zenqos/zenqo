@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // --- Integration tests ---
@@ -315,3 +316,21 @@ func TestAppPATCHRoute(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
+
+// ---- SetShutdownTimeout tests ----
+
+func TestSetShutdownTimeoutDefault(t *testing.T) {
+	app := NewApp()
+	if app.shutdownTimeout != 30*time.Second {
+		t.Fatalf("expected default shutdownTimeout 30s, got %v", app.shutdownTimeout)
+	}
+}
+
+func TestSetShutdownTimeoutUpdates(t *testing.T) {
+	app := NewApp()
+	app.SetShutdownTimeout(60 * time.Second)
+	if app.shutdownTimeout != 60*time.Second {
+		t.Fatalf("expected shutdownTimeout 60s after SetShutdownTimeout, got %v", app.shutdownTimeout)
+	}
+}
+
