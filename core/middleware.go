@@ -45,11 +45,17 @@ func InterceptorToMiddleware(i Interceptor) MiddlewareFunc {
 }
 
 // applyGuard wraps a single HandlerFunc with Guard logic at the route level.
-func applyGuard(g Guard, next http.HandlerFunc) http.HandlerFunc {
+// When errHandler is non-nil, guard rejections are routed through it
+// (e.g. for RFC 9457 problem+json responses).
+func applyGuard(g Guard, next http.HandlerFunc, errHandler ErrorHandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		allowed, err := g.CanActivate(r)
 		if !allowed {
-			guardReject(w, err)
+			if errHandler != nil {
+				guardRejectWith(w, r, err, errHandler)
+			} else {
+				guardReject(w, err)
+			}
 			return
 		}
 		next(w, r)
@@ -68,6 +74,30 @@ func guardReject(w http.ResponseWriter, err error) {
 		return
 	}
 	JSON(w, 403, ErrorResponse{Code: 403, Message: "access denied"})
+}
+
+// guardToMiddleware converts a Guard into a MiddlewareFunc that routes
+// rejections through the given ErrorHandlerFunc.
+func guardToMiddleware(g Guard, errHandler ErrorHandlerFunc) MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			allowed, err := g.CanActivate(r)
+			if !allowed {
+				guardRejectWith(w, r, err, errHandler)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// guardRejectWith routes a guard rejection through the given error handler.
+func guardRejectWith(w http.ResponseWriter, r *http.Request, err error, errHandler ErrorHandlerFunc) {
+	if err != nil {
+		errHandler(w, r, err)
+		return
+	}
+	errHandler(w, r, ErrForbidden("access denied"))
 }
 
 // applyInterceptor wraps a single HandlerFunc with Interceptor logic at the route level.

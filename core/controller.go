@@ -171,7 +171,7 @@ func (bc *BaseController) RegisterRoutes(r Router) {
 	r.Group(bc.basePath, func(r Router) {
 		r.Use(bc.middlewares...)
 		for _, g := range bc.guards {
-			r.Use(GuardToMiddleware(g))
+			r.Use(guardToMiddleware(g, errHandler))
 		}
 		for _, i := range bc.interceptors {
 			r.Use(InterceptorToMiddleware(i))
@@ -189,7 +189,7 @@ func (bc *BaseController) RegisterRoutes(r Router) {
 				handler = applyInterceptor(route.Interceptors[i], handler)
 			}
 			for i := len(route.Guards) - 1; i >= 0; i-- {
-				handler = applyGuard(route.Guards[i], handler)
+				handler = applyGuard(route.Guards[i], handler, errHandler)
 			}
 			var h http.Handler = handler
 			for i := len(route.Middlewares) - 1; i >= 0; i-- {

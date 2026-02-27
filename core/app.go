@@ -17,15 +17,16 @@ import (
 
 // App is the central application instance.
 type App struct {
-	adapter      RouterAdapter
-	modules      []Module
-	controllers  []Controller
-	globalGuards []Guard
-	prefix       string
-	buildOnce    sync.Once
-	root         BaseController
-	errorHandler ErrorHandlerFunc
+	adapter         RouterAdapter
+	modules         []Module
+	controllers     []Controller
+	globalGuards    []Guard
+	prefix          string
+	buildOnce       sync.Once
+	root            BaseController
+	errorHandler    ErrorHandlerFunc
 	shutdownTimeout time.Duration
+	rfc9457         bool
 }
 
 // errorHandlerSetter is satisfied by any Controller that embeds BaseController.
@@ -72,6 +73,16 @@ func NewAppWith(adapter RouterAdapter) *App {
 // Call DefaultErrorHandler(w, r, err) inside your implementation to fall back to built-in behavior.
 func (a *App) SetErrorHandler(fn ErrorHandlerFunc) *App {
 	a.errorHandler = fn
+	return a
+}
+
+// UseRFC9457 enables RFC 9457 Problem Details for all error responses.
+// When enabled, errors are returned as application/problem+json instead of
+// the default ErrorResponse format.
+// This also re-registers 404/405 handlers and the panic recoverer to use the RFC format.
+func (a *App) UseRFC9457() *App {
+	a.rfc9457 = true
+	a.errorHandler = RFC9457ErrorHandler
 	return a
 }
 
@@ -156,8 +167,19 @@ func (a *App) buildRoutes() {
 			}
 		}
 
+		// RFC 9457: re-register 404/405 and recoverer in problem+json format
+		if a.rfc9457 {
+			a.adapter.NotFound(func(w http.ResponseWriter, r *http.Request) {
+				ProblemJSON(w, ProblemDetail{Status: 404, Instance: r.URL.Path})
+			})
+			a.adapter.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+				ProblemJSON(w, ProblemDetail{Status: 405, Instance: r.URL.Path})
+			})
+			a.adapter.Use(zenqoRecovererWith(errHandler))
+		}
+
 		for _, g := range a.globalGuards {
-			a.adapter.Use(GuardToMiddleware(g))
+			a.adapter.Use(guardToMiddleware(g, errHandler))
 		}
 		mount := func(r Router) {
 			for _, m := range a.modules {
