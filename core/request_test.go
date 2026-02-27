@@ -97,3 +97,90 @@ func TestParamNegativeUint(t *testing.T) {
 		t.Fatal("expected error for negative uint param")
 	}
 }
+
+// --- BindQuery edge-case tests ---
+
+func TestBindQueryPresent(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/search?q=hello", nil)
+	got := BindQuery(r, "q")
+	if got != "hello" {
+		t.Fatalf("expected %q, got %q", "hello", got)
+	}
+}
+
+func TestBindQueryMissing(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/search", nil)
+	got := BindQuery(r, "q")
+	if got != "" {
+		t.Fatalf("expected empty string, got %q", got)
+	}
+}
+
+func TestBindQueryEmptyValue(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/search?key=", nil)
+	got := BindQuery(r, "key")
+	if got != "" {
+		t.Fatalf("expected empty string, got %q", got)
+	}
+}
+
+func TestBindQueryURLEncoded(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/search?q=hello+world", nil)
+	got := BindQuery(r, "q")
+	if got != "hello world" {
+		t.Fatalf("expected %q, got %q", "hello world", got)
+	}
+}
+
+func TestBindQueryMultipleValues(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/search?q=first&q=second", nil)
+	got := BindQuery(r, "q")
+	if got != "first" {
+		t.Fatalf("expected %q, got %q", "first", got)
+	}
+}
+
+func TestBindQuerySpecialChars(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/search?q=%ED%95%9C%EA%B8%80", nil)
+	got := BindQuery(r, "q")
+	if got != "한글" {
+		t.Fatalf("expected %q, got %q", "한글", got)
+	}
+}
+
+// --- BindHeader edge-case tests ---
+
+func TestBindHeaderPresent(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "Bearer token123")
+	got := BindHeader(r, "Authorization")
+	if got != "Bearer token123" {
+		t.Fatalf("expected %q, got %q", "Bearer token123", got)
+	}
+}
+
+func TestBindHeaderMissing(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/", nil)
+	got := BindHeader(r, "X-Missing")
+	if got != "" {
+		t.Fatalf("expected empty string, got %q", got)
+	}
+}
+
+func TestBindHeaderCaseInsensitive(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/", nil)
+	r.Header.Set("Content-Type", "application/json")
+	got := BindHeader(r, "content-type")
+	if got != "application/json" {
+		t.Fatalf("expected %q, got %q", "application/json", got)
+	}
+}
+
+func TestBindHeaderEmptyValue(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/", nil)
+	r.Header.Set("X-Empty", "")
+	got := BindHeader(r, "X-Empty")
+	if got != "" {
+		t.Fatalf("expected empty string, got %q", got)
+	}
+}
