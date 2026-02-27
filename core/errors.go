@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	chimw "github.com/go-chi/chi/v5/middleware"
 	zlog "github.com/zenqos/zenqo/internal/log"
+	"github.com/zenqos/zenqo/middleware"
 )
 
 // HTTPError carries an HTTP status code and message.
@@ -68,7 +68,7 @@ func DefaultErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
 		Error(w, he.Status, he.Message)
 		return
 	}
-	reqID := chimw.GetReqID(r.Context())
+	reqID := middleware.GetReqID(r.Context())
 	zlog.Err("Handler", fmt.Sprintf("[%s] %s %s — %v", reqID, r.Method, r.URL.Path, err))
 	InternalError(w, "internal server error")
 }

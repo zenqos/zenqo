@@ -11,13 +11,13 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	chimw "github.com/go-chi/chi/v5/middleware"
 	zlog "github.com/zenqos/zenqo/internal/log"
+	"github.com/zenqos/zenqo/middleware"
 )
 
 // App is the central application instance.
 type App struct {
-	router       chi.Router
+	adapter      RouterAdapter
 	modules      []Module
 	controllers  []Controller
 	globalGuards []Guard
@@ -34,20 +34,34 @@ type errorHandlerSetter interface {
 	setErrorHandler(ErrorHandlerFunc)
 }
 
+// urlParamFn is the package-level function used by URLParam.
+// It is set by NewAppWith to delegate to the active RouterAdapter.
+var urlParamFn = func(r *http.Request, key string) string {
+	return chi.URLParam(r, key)
+}
+
 // NewApp creates a new Zenqo application with sensible defaults:
 // request ID injection, real-IP resolution, panic recovery, and JSON 404/405 responses.
 func NewApp() *App {
-	r := chi.NewRouter()
-	r.Use(chimw.RequestID)
-	r.Use(chimw.RealIP)
-	r.Use(zenqoRecoverer)
-	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+	return NewAppWith(newChiRouterAdapter())
+}
+
+// NewAppWith creates a new Zenqo application using the provided RouterAdapter.
+// Use this to bring your own router while keeping the rest of Zenqo's features.
+func NewAppWith(adapter RouterAdapter) *App {
+	adapter.Use(middleware.RequestID)
+	adapter.Use(middleware.RealIP)
+	adapter.Use(zenqoRecoverer)
+	adapter.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		Error(w, 404, "not found")
 	})
-	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+	adapter.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		Error(w, 405, "method not allowed")
 	})
-	a := &App{router: r}
+
+	urlParamFn = adapter.URLParam
+
+	a := &App{adapter: adapter}
 	a.shutdownTimeout = 30 * time.Second
 	a.root.basePath = "/"
 	return a
@@ -80,9 +94,7 @@ func (a *App) UseGlobalGuard(guards ...Guard) *App {
 }
 
 func (a *App) Use(mws ...MiddlewareFunc) *App {
-	for _, mw := range mws {
-		a.router.Use(mw)
-	}
+	a.adapter.Use(mws...)
 	return a
 }
 
@@ -117,8 +129,8 @@ func (a *App) DELETE(path string, h HandlerFunc) *RouteDefinition { return a.roo
 // Example: UseStatic("/", "./public") serves index.html, CSS, JS, etc.
 func (a *App) UseStatic(prefix, dir string) *App {
 	fs := http.FileServer(http.Dir(dir))
-	a.router.Handle(prefix, http.StripPrefix(prefix, fs))
-	a.router.Handle(prefix+"/*", http.StripPrefix(prefix, fs))
+	a.adapter.Handle(prefix, http.StripPrefix(prefix, fs))
+	a.adapter.Handle(prefix+"/*", http.StripPrefix(prefix, fs))
 	return a
 }
 
@@ -145,10 +157,9 @@ func (a *App) buildRoutes() {
 		}
 
 		for _, g := range a.globalGuards {
-			a.router.Use(GuardToMiddleware(g))
+			a.adapter.Use(GuardToMiddleware(g))
 		}
-		mount := func(cr chi.Router) {
-			r := newChiAdapter(cr)
+		mount := func(r Router) {
 			for _, m := range a.modules {
 				for _, c := range m.Controllers() {
 					c.RegisterRoutes(r)
@@ -162,9 +173,11 @@ func (a *App) buildRoutes() {
 			}
 		}
 		if a.prefix != "" {
-			a.router.Route(a.prefix, mount)
+			a.adapter.Route(a.prefix, func(r Router) {
+				mount(r)
+			})
 		} else {
-			mount(a.router)
+			a.adapter.Mount(mount)
 		}
 	})
 }
@@ -186,10 +199,12 @@ func (a *App) Start(addr string) error {
 		zlog.Log("Controller", c.BasePath()+" registered")
 	}
 
-	chi.Walk(a.router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		zlog.Log("Router", fmt.Sprintf("%-6s %s", method, route))
-		return nil
-	})
+	if w, ok := a.adapter.(Walker); ok {
+		w.Walk(func(method, route string, _ http.Handler) error {
+			zlog.Log("Router", fmt.Sprintf("%-6s %s", method, route))
+			return nil
+		})
+	}
 
 	host := addr
 	if len(host) > 0 && host[0] == ':' {
@@ -198,11 +213,11 @@ func (a *App) Start(addr string) error {
 	elapsed := time.Since(started).Milliseconds()
 	zlog.Log("Server", fmt.Sprintf("Listening on %s  +%dms", host, elapsed))
 
-	a.router.Use(chimw.Logger)
+	a.adapter.Use(middleware.Logger)
 
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      a.router,
+		Handler:      a.adapter.Handler(),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -227,12 +242,12 @@ func (a *App) Start(addr string) error {
 // Use this for testing with httptest or for mounting Zenqo inside another server.
 func (a *App) Handler() http.Handler {
 	a.buildRoutes()
-	return a.router
+	return a.adapter.Handler()
 }
 
-// URLParam extracts a named URL parameter set by the chi router.
+// URLParam extracts a named URL parameter set by the underlying router.
 func URLParam(r *http.Request, key string) string {
-	return chi.URLParam(r, key)
+	return urlParamFn(r, key)
 }
 
 // Zlog is the public logger for use inside modules and handlers.
@@ -241,24 +256,75 @@ func Zlog(label, msg string) { zlog.Log(label, msg) }
 // Zerr is the public error logger for use inside modules and handlers.
 func Zerr(label, msg string) { zlog.Err(label, msg) }
 
-type chiAdapter struct{ r chi.Router }
+// --- chi RouterAdapter (default) ---
 
-func newChiAdapter(r chi.Router) Router { return &chiAdapter{r: r} }
+type chiRouterAdapter struct{ r chi.Router }
 
-func (a *chiAdapter) Get(path string, h http.HandlerFunc)    { a.r.Get(path, h) }
-func (a *chiAdapter) Post(path string, h http.HandlerFunc)   { a.r.Post(path, h) }
-func (a *chiAdapter) Put(path string, h http.HandlerFunc)    { a.r.Put(path, h) }
-func (a *chiAdapter) Patch(path string, h http.HandlerFunc)  { a.r.Patch(path, h) }
-func (a *chiAdapter) Delete(path string, h http.HandlerFunc) { a.r.Delete(path, h) }
+func newChiRouterAdapter() *chiRouterAdapter {
+	return &chiRouterAdapter{r: chi.NewRouter()}
+}
 
-func (a *chiAdapter) Use(mw ...MiddlewareFunc) {
+func (a *chiRouterAdapter) Handler() http.Handler { return a.r }
+
+func (a *chiRouterAdapter) URLParam(r *http.Request, key string) string {
+	return chi.URLParam(r, key)
+}
+
+func (a *chiRouterAdapter) Use(mw ...MiddlewareFunc) {
 	for _, m := range mw {
 		a.r.Use(m)
 	}
 }
 
-func (a *chiAdapter) Group(path string, fn func(r Router)) {
+func (a *chiRouterAdapter) Route(pattern string, fn func(r Router)) {
+	a.r.Route(pattern, func(cr chi.Router) {
+		fn(newChiSubRouter(cr))
+	})
+}
+
+func (a *chiRouterAdapter) Mount(fn func(r Router)) {
+	fn(newChiSubRouter(a.r))
+}
+
+func (a *chiRouterAdapter) Handle(pattern string, h http.Handler) {
+	a.r.Handle(pattern, h)
+}
+
+func (a *chiRouterAdapter) NotFound(h http.HandlerFunc) {
+	a.r.NotFound(h)
+}
+
+func (a *chiRouterAdapter) MethodNotAllowed(h http.HandlerFunc) {
+	a.r.MethodNotAllowed(h)
+}
+
+// Walk implements the Walker interface for route introspection.
+func (a *chiRouterAdapter) Walk(fn func(method, route string, handler http.Handler) error) error {
+	return chi.Walk(a.r, func(method, route string, handler http.Handler, _ ...func(http.Handler) http.Handler) error {
+		return fn(method, route, handler)
+	})
+}
+
+// --- chi sub-router (implements Router for controllers) ---
+
+type chiSubRouter struct{ r chi.Router }
+
+func newChiSubRouter(r chi.Router) Router { return &chiSubRouter{r: r} }
+
+func (a *chiSubRouter) Get(path string, h http.HandlerFunc)    { a.r.Get(path, h) }
+func (a *chiSubRouter) Post(path string, h http.HandlerFunc)   { a.r.Post(path, h) }
+func (a *chiSubRouter) Put(path string, h http.HandlerFunc)    { a.r.Put(path, h) }
+func (a *chiSubRouter) Patch(path string, h http.HandlerFunc)  { a.r.Patch(path, h) }
+func (a *chiSubRouter) Delete(path string, h http.HandlerFunc) { a.r.Delete(path, h) }
+
+func (a *chiSubRouter) Use(mw ...MiddlewareFunc) {
+	for _, m := range mw {
+		a.r.Use(m)
+	}
+}
+
+func (a *chiSubRouter) Group(path string, fn func(r Router)) {
 	a.r.Route(path, func(cr chi.Router) {
-		fn(newChiAdapter(cr))
+		fn(newChiSubRouter(cr))
 	})
 }
