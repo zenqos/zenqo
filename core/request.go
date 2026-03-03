@@ -160,7 +160,7 @@ func BindFiles(r *http.Request, field string) ([]*UploadedFile, error) {
 //
 //	id, err := core.Param[int64](r, "id")   // replaces strconv.ParseInt(core.URLParam(r, "id"), 10, 64)
 //	name, err := core.Param[string](r, "name")
-func Param[T interface {string | int | int64 | uint | uint64}](r *http.Request, key string) (T, error) {
+func Param[T interface { string | int | int64 | uint | uint64 }](r *http.Request, key string) (T, error) {
 	raw := URLParam(r, key)
 	var zero T
 	if raw == "" {

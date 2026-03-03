@@ -23,8 +23,8 @@ func TestPluralize(t *testing.T) {
 		{"buzz", "buzzes"},
 		{"branch", "branches"},
 		{"watch", "watches"},
-		{"day", "days"},   // vowel before y → just add s
-		{"key", "keys"},   // vowel before y → just add s
+		{"day", "days"},  // vowel before y → just add s
+		{"key", "keys"},  // vowel before y → just add s
 		{"city", "cities"}, // consonant before y → ies
 	}
 	for _, c := range cases {

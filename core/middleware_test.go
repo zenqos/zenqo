@@ -112,7 +112,7 @@ func TestInterceptorToMiddleware_BeforeAfter(t *testing.T) {
 
 	var gotCtxVal interface{}
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotCtxVal = r.Context().Value("user")
+		gotCtxVal = r.Context().Value(testCtxKey("user"))
 		w.WriteHeader(201)
 	})
 
