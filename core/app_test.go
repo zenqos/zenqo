@@ -25,7 +25,9 @@ func TestAppGETRoute(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var body map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &body)
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
 	if body["success"] != true {
 		t.Fatalf("expected success=true, got %v", body["success"])
 	}
@@ -123,7 +125,9 @@ func TestApp404JSON(t *testing.T) {
 		t.Fatalf("expected application/json, got %q", ct)
 	}
 	var body map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &body)
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
 	if body["message"] != "not found" {
 		t.Fatalf("expected 'not found', got %v", body["message"])
 	}

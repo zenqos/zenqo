@@ -39,7 +39,9 @@ func TestMarshalSimpleStruct(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	var m map[string]any
-	json.Unmarshal(b, &m)
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
 
 	if m["id"] != float64(1) {
 		t.Errorf("expected id=1, got %v", m["id"])
@@ -62,7 +64,9 @@ func TestMarshalOmitempty(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	var m map[string]any
-	json.Unmarshal(b, &m)
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
 
 	if _, exists := m["value"]; exists {
 		t.Error("omitempty field should not be present when zero")
@@ -79,7 +83,9 @@ func TestMarshalExcludeTag(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	var m map[string]any
-	json.Unmarshal(b, &m)
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
 
 	if _, exists := m["private"]; exists {
 		t.Error("excluded field should not be present")
@@ -123,7 +129,9 @@ func TestMarshalEmbeddedStruct(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	var m map[string]any
-	json.Unmarshal(b, &m)
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
 
 	// Embedded fields should be inlined
 	if m["id"] != float64(1) {
@@ -143,7 +151,9 @@ func TestMarshalZenqoTag(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	var m map[string]any
-	json.Unmarshal(b, &m)
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
 
 	if m["custom_key"] != "value" {
 		t.Errorf("expected custom_key=value, got %v", m)

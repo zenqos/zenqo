@@ -117,9 +117,8 @@ func TestScaffold_ExistingDir(t *testing.T) {
 	dir := t.TempDir()
 	// dir already exists — runNew should return an error
 	data := projectData{ModuleName: "m", ProjectName: "m", Port: "3000"}
-	if err := scaffold(dir, data); err != nil {
-		// scaffold itself doesn't check; runNew does — just confirm scaffold doesn't panic
-	}
+	// scaffold itself doesn't check existence; runNew does — just confirm scaffold doesn't panic
+	_ = scaffold(dir, data)
 	_ = data
 }
 

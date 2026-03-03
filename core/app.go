@@ -226,7 +226,7 @@ func (a *App) Start(addr string) error {
 	}
 
 	if w, ok := a.adapter.(Walker); ok {
-		w.Walk(func(method, route string, _ http.Handler) error {
+		_ = w.Walk(func(method, route string, _ http.Handler) error {
 			zlog.Log("Router", fmt.Sprintf("%-6s %s", method, route))
 			return nil
 		})
