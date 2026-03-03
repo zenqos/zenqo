@@ -17,11 +17,32 @@ func NewController() *Controller {
 	c := &Controller{svc: NewService()}
 	c.SetBasePath("/users")
 
-	c.GET("/", c.findAll)
-	c.GET("/{id}", c.findOne)
-	c.POST("/", c.create)
-	c.PUT("/{id}", c.update)
-	c.DELETE("/{id}", c.remove)
+	c.GET("/", c.findAll).
+		Summary("List all users").
+		Tags("users").
+		Response(200, []User{})
+
+	c.GET("/{id}", c.findOne).
+		Summary("Get user by ID").
+		Tags("users").
+		Response(200, User{})
+
+	c.POST("/", c.create).
+		Summary("Create a new user").
+		Tags("users").
+		Body(CreateUserDTO{}).
+		Response(201, User{})
+
+	c.PUT("/{id}", c.update).
+		Summary("Update a user").
+		Tags("users").
+		Body(UpdateUserDTO{}).
+		Response(200, User{})
+
+	c.DELETE("/{id}", c.remove).
+		Summary("Delete a user").
+		Tags("users").
+		Response(204, nil)
 
 	return c
 }
