@@ -1,0 +1,37 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - typecheck
+    - misspell
+    - gofmt
+    - goimports
+    - revive
+
+linters-settings:
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+      - name: var-naming
+        disabled: false
+  goimports:
+    local-prefixes: github.com/zenqos/zenqo
+
+issues:
+  exclude-rules:
+    # Allow errcheck to be skipped on w.Write() calls (HTTP handlers)
+    - linters: [errcheck]
+      text: "w.Write"
+    # Allow errcheck on fmt.Fprintf in handlers
+    - linters: [errcheck]
+      text: "fmt.Fprintf"
+  # Show all issues
+  max-issues-per-linter: 0
+  max-same-issues: 0
