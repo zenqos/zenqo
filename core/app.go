@@ -91,6 +91,10 @@ func (a *App) SetGlobalPrefix(prefix string) *App {
 	return a
 }
 
+// Prefix returns the global URL prefix set via SetGlobalPrefix.
+// Returns an empty string if no prefix has been configured.
+func (a *App) Prefix() string { return a.prefix }
+
 // SetShutdownTimeout sets the maximum duration to wait for in-flight requests
 // to complete when the server receives SIGINT or SIGTERM.
 // Default is 30 seconds.

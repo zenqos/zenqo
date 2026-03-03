@@ -84,3 +84,11 @@ type RouterAdapter interface {
 type Walker interface {
 	Walk(fn func(method, route string, handler http.Handler) error) error
 }
+
+// RouteProvider is an optional interface that Controllers can implement
+// to expose their registered route definitions.
+// Used by the OpenAPI spec generator to collect route metadata.
+// BaseController satisfies this interface automatically.
+type RouteProvider interface {
+	Routes() []*RouteDefinition
+}
