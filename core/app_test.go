@@ -93,8 +93,13 @@ type testModule struct {
 	controllers []Controller
 }
 
-func (m *testModule) Name() string { return m.name }
-func (m *testModule) Controllers() []Controller { return m.controllers }
+func (m *testModule) Name() string {
+	return m.name
+}
+
+func (m *testModule) Controllers() []Controller {
+	return m.controllers
+}
 
 func TestAppGlobalGuard(t *testing.T) {
 	app := NewApp()
