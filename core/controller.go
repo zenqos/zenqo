@@ -12,7 +12,7 @@ type RouteDocMeta struct {
 	Description string
 	Tags        []string
 	Deprecated  bool
-	RequestBody any          // Go type used to infer the request body JSON schema
+	RequestBody any // Go type used to infer the request body JSON schema
 	Responses   []ResponseDoc
 }
 
