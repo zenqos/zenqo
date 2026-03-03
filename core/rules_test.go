@@ -11,13 +11,20 @@ func TestCheckURL(t *testing.T) {
 		t.Fatalf("empty should pass, got %v", err)
 	}
 	// valid URLs
-	for _, u := range []string{"http://example.com", "https://example.com/path", "ftp://files.example.com"} {
+	for _, u := range []string{"http://example.com", "https://example.com/path", "https://example.com:8080/api"} {
 		if err := validate(dto{URL: u}); err != nil {
 			t.Fatalf("valid URL %q should pass, got %v", u, err)
 		}
 	}
 	// invalid URLs
-	for _, u := range []string{"example.com", "not-a-url", "://missing-scheme"} {
+	for _, u := range []string{
+		"example.com",       // no scheme
+		"not-a-url",         // no scheme
+		"://missing-scheme", // no scheme
+		"http://",           // no host
+		"https://",          // no host
+		"ftp://example.com", // unsupported scheme
+	} {
 		assertValidationField(t, validate(dto{URL: u}), "url", "url must be a valid URL")
 	}
 }

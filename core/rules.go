@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"net/url"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -151,16 +152,8 @@ func checkURL(fv reflect.Value, field string) string {
 	if s == "" {
 		return ""
 	}
-	if !strings.Contains(s, "://") {
-		return fmt.Sprintf("%s must be a valid URL", field)
-	}
-	// Minimal check: scheme://host
-	parts := strings.SplitN(s, "://", 2)
-	scheme := parts[0]
-	if scheme != "http" && scheme != "https" && scheme != "ftp" {
-		return fmt.Sprintf("%s must be a valid URL", field)
-	}
-	if len(parts[1]) == 0 {
+	u, err := url.Parse(s)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 		return fmt.Sprintf("%s must be a valid URL", field)
 	}
 	return ""
