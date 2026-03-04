@@ -121,6 +121,10 @@ curl http://localhost:3000/
   <img src="https://contrib.rocks/image?repo=zenqos/zenqo" />
 </a>
 
+| Contributor | Contribution |
+|---|---|
+| [@aicontentcreate2023-star](https://github.com/aicontentcreate2023-star) | fix: use `net/url.Parse` for URL validation (#39) |
+
 ## Contributing
 
 We welcome contributions! Please read the [Contributing Guide](CONTRIBUTING.md) before submitting a Pull Request.

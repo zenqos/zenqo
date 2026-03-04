@@ -83,6 +83,8 @@ func TestGuardToMiddleware_DeniedWith429(t *testing.T) {
 
 // --- InterceptorToMiddleware tests ---
 
+type testCtxKey string
+
 type testInterceptor struct {
 	beforeCalled bool
 	afterCalled  bool
@@ -94,7 +96,7 @@ type testInterceptor struct {
 func (i *testInterceptor) Before(ctx context.Context, r *http.Request) context.Context {
 	i.beforeCalled = true
 	if i.ctxKey != "" {
-		return context.WithValue(ctx, i.ctxKey, i.ctxValue)
+		return context.WithValue(ctx, testCtxKey(i.ctxKey), i.ctxValue)
 	}
 	return ctx
 }
@@ -110,7 +112,7 @@ func TestInterceptorToMiddleware_BeforeAfter(t *testing.T) {
 
 	var gotCtxVal interface{}
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotCtxVal = r.Context().Value("user")
+		gotCtxVal = r.Context().Value(testCtxKey("user"))
 		w.WriteHeader(201)
 	})
 

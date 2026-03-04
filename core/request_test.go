@@ -1,7 +1,9 @@
 package core
 
 import (
+	"bytes"
 	"context"
+	"mime/multipart"
 	"net/http"
 	"testing"
 
@@ -95,5 +97,182 @@ func TestParamNegativeUint(t *testing.T) {
 	_, err := Param[uint64](r, "id")
 	if err == nil {
 		t.Fatal("expected error for negative uint param")
+	}
+}
+
+// --- BindQuery edge-case tests ---
+
+func TestBindQueryPresent(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/search?q=hello", nil)
+	got := BindQuery(r, "q")
+	if got != "hello" {
+		t.Fatalf("expected %q, got %q", "hello", got)
+	}
+}
+
+func TestBindQueryMissing(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/search", nil)
+	got := BindQuery(r, "q")
+	if got != "" {
+		t.Fatalf("expected empty string, got %q", got)
+	}
+}
+
+func TestBindQueryEmptyValue(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/search?key=", nil)
+	got := BindQuery(r, "key")
+	if got != "" {
+		t.Fatalf("expected empty string, got %q", got)
+	}
+}
+
+func TestBindQueryURLEncoded(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/search?q=hello+world", nil)
+	got := BindQuery(r, "q")
+	if got != "hello world" {
+		t.Fatalf("expected %q, got %q", "hello world", got)
+	}
+}
+
+func TestBindQueryMultipleValues(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/search?q=first&q=second", nil)
+	got := BindQuery(r, "q")
+	if got != "first" {
+		t.Fatalf("expected %q, got %q", "first", got)
+	}
+}
+
+func TestBindQuerySpecialChars(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/search?q=%ED%95%9C%EA%B8%80", nil)
+	got := BindQuery(r, "q")
+	if got != "한글" {
+		t.Fatalf("expected %q, got %q", "한글", got)
+	}
+}
+
+// --- BindHeader edge-case tests ---
+
+func TestBindHeaderPresent(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "Bearer token123")
+	got := BindHeader(r, "Authorization")
+	if got != "Bearer token123" {
+		t.Fatalf("expected %q, got %q", "Bearer token123", got)
+	}
+}
+
+func TestBindHeaderMissing(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/", nil)
+	got := BindHeader(r, "X-Missing")
+	if got != "" {
+		t.Fatalf("expected empty string, got %q", got)
+	}
+}
+
+func TestBindHeaderCaseInsensitive(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/", nil)
+	r.Header.Set("Content-Type", "application/json")
+	got := BindHeader(r, "content-type")
+	if got != "application/json" {
+		t.Fatalf("expected %q, got %q", "application/json", got)
+	}
+}
+
+func TestBindHeaderEmptyValue(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/", nil)
+	r.Header.Set("X-Empty", "")
+	got := BindHeader(r, "X-Empty")
+	if got != "" {
+		t.Fatalf("expected empty string, got %q", got)
+	}
+}
+
+// ─── BindFile / BindFiles ────────────────────────────────────────────────────
+
+// newUploadRequest builds a multipart/form-data request with one or more files.
+func newUploadRequest(field string, files map[string][]byte) *http.Request {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for name, content := range files {
+		fw, _ := w.CreateFormFile(field, name)
+		fw.Write(content) //nolint:errcheck
+	}
+	w.Close()
+	r, _ := http.NewRequest("POST", "/upload", &buf)
+	r.Header.Set("Content-Type", w.FormDataContentType())
+	return r
+}
+
+func TestBindFile_Single(t *testing.T) {
+	r := newUploadRequest("avatar", map[string][]byte{
+		"photo.jpg": []byte("fake-image-data"),
+	})
+	f, err := BindFile(r, "avatar")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if f.Filename != "photo.jpg" {
+		t.Errorf("Filename = %q, want %q", f.Filename, "photo.jpg")
+	}
+	if string(f.Content) != "fake-image-data" {
+		t.Errorf("Content = %q, want %q", f.Content, "fake-image-data")
+	}
+	if f.Size != int64(len("fake-image-data")) {
+		t.Errorf("Size = %d, want %d", f.Size, len("fake-image-data"))
+	}
+}
+
+func TestBindFile_MissingField(t *testing.T) {
+	r := newUploadRequest("document", map[string][]byte{
+		"file.pdf": []byte("data"),
+	})
+	_, err := BindFile(r, "avatar") // wrong field
+	if err == nil {
+		t.Fatal("expected error for missing field, got nil")
+	}
+}
+
+func TestBindFiles_Multiple(t *testing.T) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
+		fw, _ := w.CreateFormFile("files", name)
+		fw.Write([]byte("content-" + name)) //nolint:errcheck
+	}
+	w.Close()
+	r, _ := http.NewRequest("POST", "/upload", &buf)
+	r.Header.Set("Content-Type", w.FormDataContentType())
+
+	files, err := BindFiles(r, "files")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(files) != 3 {
+		t.Errorf("expected 3 files, got %d", len(files))
+	}
+}
+
+func TestBindFiles_EmptyField(t *testing.T) {
+	r := newUploadRequest("images", map[string][]byte{
+		"img.png": []byte("data"),
+	})
+	files, err := BindFiles(r, "other") // absent field
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(files) != 0 {
+		t.Errorf("expected 0 files, got %d", len(files))
+	}
+}
+
+func TestBindFile_DefaultContentType(t *testing.T) {
+	r := newUploadRequest("file", map[string][]byte{"data.bin": []byte("bytes")})
+	f, err := BindFile(r, "file")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Content-Type may be application/octet-stream if not set by the writer.
+	if f.ContentType == "" {
+		t.Error("ContentType should not be empty")
 	}
 }

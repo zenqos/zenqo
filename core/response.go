@@ -2,6 +2,7 @@ package core
 
 import (
 	"net/http"
+	"strconv"
 
 	enc "github.com/zenqos/zenqo/internal/encoding"
 	zlog "github.com/zenqos/zenqo/internal/log"
@@ -83,4 +84,69 @@ func ValidationFailed(w http.ResponseWriter, errs []FieldError) {
 // Paginated sends a 200 response with list data and pagination metadata.
 func Paginated(w http.ResponseWriter, data interface{}, total, page, perPage int) {
 	JSON(w, 200, PaginatedResponse{true, data, PaginationMeta{total, page, perPage}})
+}
+
+// ProblemDetail represents an RFC 9457 Problem Details object.
+// When UseRFC9457 is enabled, all error responses use this format
+// with Content-Type: application/problem+json.
+//
+// Reference: https://www.rfc-editor.org/rfc/rfc9457
+type ProblemDetail struct {
+	Type     string       `json:"type"`               // URI reference; default "about:blank"
+	Title    string       `json:"title"`              // short human-readable summary
+	Status   int          `json:"status"`             // HTTP status code
+	Detail   string       `json:"detail,omitempty"`   // specific explanation
+	Instance string       `json:"instance,omitempty"` // URI of the specific occurrence
+	Errors   []FieldError `json:"errors,omitempty"`   // validation errors
+}
+
+// ProblemJSON writes a ProblemDetail as application/problem+json.
+func ProblemJSON(w http.ResponseWriter, pd ProblemDetail) {
+	if pd.Type == "" {
+		pd.Type = "about:blank"
+	}
+	if pd.Title == "" {
+		pd.Title = httpStatusTitle(pd.Status)
+	}
+	b, err := enc.Marshal(pd)
+	if err != nil {
+		zlog.Err("ProblemJSON", err.Error())
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"type":"about:blank","title":"Internal Server Error","status":500}`)) //nolint:errcheck
+		return
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(pd.Status)
+	w.Write(b) //nolint:errcheck
+}
+
+// httpStatusTitle returns the standard HTTP status title for common codes.
+func httpStatusTitle(code int) string {
+	switch code {
+	case 400:
+		return "Bad Request"
+	case 401:
+		return "Unauthorized"
+	case 403:
+		return "Forbidden"
+	case 404:
+		return "Not Found"
+	case 405:
+		return "Method Not Allowed"
+	case 409:
+		return "Conflict"
+	case 422:
+		return "Unprocessable Entity"
+	case 429:
+		return "Too Many Requests"
+	case 500:
+		return "Internal Server Error"
+	case 502:
+		return "Bad Gateway"
+	case 503:
+		return "Service Unavailable"
+	default:
+		return "HTTP " + strconv.Itoa(code)
+	}
 }
