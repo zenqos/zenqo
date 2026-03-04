@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [v0.0.2] - 2026-03-04
 
 ### 10. Guard Interface Improvement
 
@@ -34,7 +34,7 @@ Added 12 new validation rules to `core/rules.go`, bringing the total to 17.
 
 | Rule | Example | Behavior |
 |------|---------|----------|
-| `url` | `validate:"url"` | Must be a valid URL (http/https/ftp) |
+| `url` | `validate:"url"` | Must be a valid URL (http/https only, blocks userinfo injection) |
 | `uuid` | `validate:"uuid"` | Must be a valid UUID format |
 | `alpha` | `validate:"alpha"` | Letters only |
 | `alphanum` | `validate:"alphanum"` | Letters and numbers only |
