@@ -117,9 +117,33 @@ curl http://localhost:3000/
 
 ## Contributors
 
-<a href="https://github.com/zenqos/zenqo/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=zenqos/zenqo" />
-</a>
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%">
+        <a href="https://github.com/ftery0">
+          <img src="https://avatars.githubusercontent.com/u/127281057?v=4" width="80px;" alt="ftery0"/><br />
+          <sub><b>ftery0</b></sub>
+        </a><br />
+        <a title="Code">💻</a>
+      </td>
+      <td align="center" valign="top" width="14.28%">
+        <a href="https://github.com/RogueTex">
+          <img src="https://avatars.githubusercontent.com/u/218665445?v=4" width="80px;" alt="Raghu :)"/><br />
+          <sub><b>Raghu :)</b></sub>
+        </a><br />
+        <a title="Code">💻</a>
+      </td>
+      <td align="center" valign="top" width="14.28%">
+        <a href="https://github.com/aicontentcreate2023-star">
+          <img src="https://avatars.githubusercontent.com/u/259026231?v=4" width="80px;" alt="aicontentcreate2023-star"/><br />
+          <sub><b>aicontentcreate2023-star</b></sub>
+        </a><br />
+        <a title="Code">💻</a>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 ## Contributing
 
