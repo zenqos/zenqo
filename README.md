@@ -120,9 +120,6 @@ curl http://localhost:3000/
 <a href="https://github.com/zenqos/zenqo/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=zenqos/zenqo" />
 </a>
-<a href="https://github.com/aicontentcreate2023-star">
-  <img src="https://avatars.githubusercontent.com/u/259026231?v=4" width="40" height="40" style="border-radius:50%" alt="aicontentcreate2023-star" />
-</a>
 
 ## Contributing
 
