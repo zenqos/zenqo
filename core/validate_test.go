@@ -92,7 +92,7 @@ func TestValidateNestedStruct(t *testing.T) {
 		City string `validate:"required"`
 	}
 	type dto struct {
-		Name    string  `validate:"required"`
+		Name    string `validate:"required"`
 		Address Address
 	}
 	err := validate(dto{Name: "Alice"})

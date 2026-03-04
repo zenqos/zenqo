@@ -4,6 +4,24 @@ import (
 	"net/http"
 )
 
+// RouteDocMeta holds optional OpenAPI documentation metadata for a route.
+// Populate it using the builder methods (Summary, Tags, Body, Response, etc.)
+// on the RouteDefinition returned by GET/POST/PUT/PATCH/DELETE.
+type RouteDocMeta struct {
+	Summary     string
+	Description string
+	Tags        []string
+	Deprecated  bool
+	RequestBody any // Go type used to infer the request body JSON schema
+	Responses   []ResponseDoc
+}
+
+// ResponseDoc describes a single HTTP response for OpenAPI schema generation.
+type ResponseDoc struct {
+	Status int
+	Body   any // Go type used to infer the response body JSON schema; nil for empty bodies
+}
+
 // RouteDefinition holds the configuration for a single route,
 // including its HTTP method, path, handler, and any Guards,
 // Interceptors, or Middlewares scoped to that route.
@@ -16,6 +34,46 @@ type RouteDefinition struct {
 	Guards       []Guard
 	Interceptors []Interceptor
 	Middlewares  []MiddlewareFunc
+	Meta         RouteDocMeta // OpenAPI documentation metadata
+}
+
+// Summary sets the one-line OpenAPI summary for this route.
+func (rd *RouteDefinition) Summary(s string) *RouteDefinition {
+	rd.Meta.Summary = s
+	return rd
+}
+
+// Description sets the longer OpenAPI description for this route.
+func (rd *RouteDefinition) Description(s string) *RouteDefinition {
+	rd.Meta.Description = s
+	return rd
+}
+
+// Tags groups this route under one or more OpenAPI tags (e.g. "users", "auth").
+func (rd *RouteDefinition) Tags(tags ...string) *RouteDefinition {
+	rd.Meta.Tags = append(rd.Meta.Tags, tags...)
+	return rd
+}
+
+// Deprecated marks this route as deprecated in the OpenAPI spec.
+func (rd *RouteDefinition) Deprecated() *RouteDefinition {
+	rd.Meta.Deprecated = true
+	return rd
+}
+
+// Body sets the Go type used to infer the request body JSON schema.
+// Pass a zero-value struct: .Body(CreateUserDTO{})
+func (rd *RouteDefinition) Body(body any) *RouteDefinition {
+	rd.Meta.RequestBody = body
+	return rd
+}
+
+// Response adds an HTTP response to the OpenAPI spec for this route.
+// Pass a zero-value struct as body, or nil for empty bodies (e.g. 204).
+// Example: .Response(200, UserDTO{}) or .Response(204, nil)
+func (rd *RouteDefinition) Response(status int, body any) *RouteDefinition {
+	rd.Meta.Responses = append(rd.Meta.Responses, ResponseDoc{Status: status, Body: body})
+	return rd
 }
 
 // UseGuard attaches one or more Guards to this route.
@@ -69,6 +127,10 @@ func (bc *BaseController) SetBasePath(p string) {
 
 // BasePath returns the URL prefix for this controller.
 func (bc *BaseController) BasePath() string { return bc.basePath }
+
+// Routes returns all route definitions registered on this controller.
+// Implements the RouteProvider interface used by the OpenAPI spec generator.
+func (bc *BaseController) Routes() []*RouteDefinition { return bc.routes }
 
 // UseControllerGuard applies Guards to every route in this controller.
 func (bc *BaseController) UseControllerGuard(g ...Guard) {
@@ -171,7 +233,7 @@ func (bc *BaseController) RegisterRoutes(r Router) {
 	r.Group(bc.basePath, func(r Router) {
 		r.Use(bc.middlewares...)
 		for _, g := range bc.guards {
-			r.Use(GuardToMiddleware(g))
+			r.Use(guardToMiddleware(g, errHandler))
 		}
 		for _, i := range bc.interceptors {
 			r.Use(InterceptorToMiddleware(i))
@@ -189,7 +251,7 @@ func (bc *BaseController) RegisterRoutes(r Router) {
 				handler = applyInterceptor(route.Interceptors[i], handler)
 			}
 			for i := len(route.Guards) - 1; i >= 0; i-- {
-				handler = applyGuard(route.Guards[i], handler)
+				handler = applyGuard(route.Guards[i], handler, errHandler)
 			}
 			var h http.Handler = handler
 			for i := len(route.Middlewares) - 1; i >= 0; i-- {

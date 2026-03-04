@@ -64,3 +64,31 @@ type HandlerFunc func(*http.Request) (any, error)
 
 // MiddlewareFunc is the standard net/http middleware signature.
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// RouterAdapter is Zenqo's router backend interface.
+// The default implementation wraps chi. Pass a custom adapter to [NewAppWith]
+// to use a different router (e.g. standard library mux, gin, etc.).
+type RouterAdapter interface {
+	Handler() http.Handler
+	URLParam(r *http.Request, key string) string
+	Use(mw ...MiddlewareFunc)
+	Route(pattern string, fn func(r Router))
+	Mount(fn func(r Router))
+	Handle(pattern string, h http.Handler)
+	NotFound(h http.HandlerFunc)
+	MethodNotAllowed(h http.HandlerFunc)
+}
+
+// Walker is an optional interface that a [RouterAdapter] can implement
+// to support route introspection (e.g. printing registered routes at startup).
+type Walker interface {
+	Walk(fn func(method, route string, handler http.Handler) error) error
+}
+
+// RouteProvider is an optional interface that Controllers can implement
+// to expose their registered route definitions.
+// Used by the OpenAPI spec generator to collect route metadata.
+// BaseController satisfies this interface automatically.
+type RouteProvider interface {
+	Routes() []*RouteDefinition
+}
