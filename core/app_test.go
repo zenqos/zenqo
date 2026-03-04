@@ -342,4 +342,3 @@ func TestSetShutdownTimeoutUpdates(t *testing.T) {
 		t.Fatalf("expected shutdownTimeout 60s after SetShutdownTimeout, got %v", app.shutdownTimeout)
 	}
 }
-
