@@ -1,5 +1,63 @@
 # Changelog
 
+## [v0.0.3] - 2026-03-05
+
+### Security Hardening
+
+#### RequestID middleware — log injection prevention (`middleware/requestid.go`)
+Client-supplied `X-Request-Id` values are now validated against `^[a-zA-Z0-9+/=_:@\-]{1,64}$` before use. Invalid or oversized values are silently replaced with a server-generated ID, preventing log injection and HTTP header splitting attacks.
+
+#### File upload — path traversal & MIME spoofing (`core/request.go`)
+- `UploadedFile.Filename` is now sanitized with `filepath.Base()` + null-byte stripping. Prevents path traversal attacks when the filename is used for file I/O.
+- `UploadedFile.ContentType` is now detected server-side via `http.DetectContentType` instead of trusting the client-declared MIME type. Prevents content-type spoofing and stored XSS when serving uploaded files.
+
+> **Breaking change:** `UploadedFile.ContentType` now returns the server-detected MIME type. Applications relying on the client-declared value should read `UploadedFile.Header.Get("Content-Type")` directly.
+
+#### JWT algorithm confusion prevention (`examples/auth/internal/auth/jwt.go`)
+`ParseToken` keyfunc now verifies `t.Method` is `*jwt.SigningMethodHMAC`, blocking algorithm confusion attacks.
+
+#### bcrypt password hashing (`examples/auth/`)
+Passwords are hashed with `bcrypt.DefaultCost` on registration and verified with `bcrypt.CompareHashAndPassword` on login. Plain-text comparison removed. Requires `golang.org/x/crypto v0.31.0`.
+
+### Bug Fixes
+
+#### Goroutine leak in RateLimit middleware (`middleware/ratelimit.go`)
+Added a `stop` channel to `rateLimiter` and a `Stop()` method. The background cleanup goroutine now exits cleanly when `Stop()` is called, eliminating the goroutine leak in tests and dynamic middleware setups.
+
+#### OpenAPI spec marshal error silently ignored (`openapi/openapi.go`)
+`json.MarshalIndent` errors are no longer silently swallowed. A failure is logged via `zlog.Err` at startup and the `/openapi.json` endpoint returns `500` with a JSON error body instead of an empty `200` response.
+
+### Refactoring
+
+#### OpenAPI package split (`openapi/`)
+`openapi.go` (563 lines) split into four focused files. No behaviour change.
+
+| File | Contents |
+|------|----------|
+| `openapi/types.go` | OpenAPI 3.1 spec structs (`Spec`, `Operation`, `Schema`, …) |
+| `openapi/builder.go` | Spec & operation builder functions |
+| `openapi/schema.go` | Schema builder + `applyValidateTags` |
+| `openapi/ui.go` | Internal controller + Swagger UI HTML template |
+
+### Files Changed
+
+| File | Action | Description |
+|------|--------|-------------|
+| `middleware/requestid.go` | Modified | `X-Request-Id` header validation |
+| `middleware/ratelimit.go` | Modified | Stop channel for cleanup goroutine |
+| `core/request.go` | Modified | Filename sanitization, server-side MIME detection |
+| `openapi/openapi.go` | Modified | Marshal error handling, imports cleaned up |
+| `openapi/builder.go` | **New** | Spec builder logic |
+| `openapi/schema.go` | **New** | Schema builder logic |
+| `openapi/types.go` | **New** | OpenAPI 3.1 type definitions |
+| `openapi/ui.go` | **New** | Swagger UI controller + HTML |
+| `examples/auth/internal/auth/jwt.go` | Modified | Algorithm verification in keyfunc |
+| `examples/auth/internal/auth/handler.go` | Modified | bcrypt hashing/comparison |
+| `examples/auth/internal/user/service.go` | Modified | Password field comment updated |
+| `examples/auth/go.mod` | Modified | Added `golang.org/x/crypto v0.31.0` |
+
+---
+
 ## [v0.0.2] - 2026-03-04
 
 ### 10. Guard Interface Improvement
