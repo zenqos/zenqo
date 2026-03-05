@@ -10,7 +10,7 @@ type User struct {
 	ID       int64
 	Name     string
 	Email    string
-	Password string // plaintext for demo — use bcrypt in production
+	Password string // bcrypt hash
 }
 
 // PublicUser is the API response entity (no password).

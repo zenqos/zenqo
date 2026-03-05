@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/zenqos/zenqo/core"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // UserStore is the interface that auth needs from the user layer.
@@ -49,7 +50,12 @@ func (c *Controller) register(r *http.Request) (any, error) {
 		return nil, core.ErrBadRequest("email already registered")
 	}
 
-	u := c.store.CreateUser(dto.Name, dto.Email, dto.Password)
+	hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, core.ErrInternal("failed to process password")
+	}
+
+	u := c.store.CreateUser(dto.Name, dto.Email, string(hash))
 
 	token, err := GenerateToken(c.secret, u.ID, u.Email)
 	if err != nil {
@@ -73,7 +79,10 @@ func (c *Controller) login(r *http.Request) (any, error) {
 	}
 
 	u := c.store.FindByEmail(dto.Email)
-	if u == nil || u.Password != dto.Password {
+	if u == nil {
+		return nil, core.ErrUnauthorized("invalid email or password")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(dto.Password)); err != nil {
 		return nil, core.ErrUnauthorized("invalid email or password")
 	}
 
