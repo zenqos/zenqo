@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -71,16 +72,19 @@ var MaxUploadSize int64 = 32 << 20
 
 // UploadedFile holds metadata and content of a single uploaded file.
 type UploadedFile struct {
-	// Filename is the original file name reported by the client.
+	// Filename is the base name of the uploaded file (directory components stripped).
+	// The value is sanitized: path separators and null bytes are removed.
+	// Do NOT use this value as a file system path without additional validation.
 	Filename string
-	// ContentType is the MIME type of the file (e.g. "image/jpeg").
-	// Defaults to "application/octet-stream" when not provided by the client.
+	// ContentType is the MIME type detected from the file content (first 512 bytes).
+	// This is determined server-side and is NOT the value declared by the client.
 	ContentType string
 	// Size is the byte length of Content.
 	Size int64
 	// Content is the raw file data. Available immediately; no need to close.
 	Content []byte
-	// Header exposes the raw multipart header for custom metadata access.
+	// Header exposes the raw multipart header for custom metadata access,
+	// including the original (unsanitized) client-declared filename and content type.
 	Header *multipart.FileHeader
 }
 
@@ -138,19 +142,23 @@ func BindFiles(r *http.Request, field string) ([]*UploadedFile, error) {
 		if readErr != nil {
 			return nil, ErrInternal("failed to read uploaded file")
 		}
-		ct := fh.Header.Get("Content-Type")
-		if ct == "" {
-			ct = "application/octet-stream"
-		}
 		result = append(result, &UploadedFile{
-			Filename:    fh.Filename,
-			ContentType: ct,
+			Filename:    sanitizeFilename(fh.Filename),
+			ContentType: http.DetectContentType(data),
 			Size:        fh.Size,
 			Content:     data,
 			Header:      fh,
 		})
 	}
 	return result, nil
+}
+
+// sanitizeFilename strips directory components and null bytes from a client-provided filename.
+func sanitizeFilename(name string) string {
+	// Remove null bytes that could truncate paths on some systems.
+	name = strings.ReplaceAll(name, "\x00", "")
+	// filepath.Base strips any leading path components (e.g. "../../etc/passwd" → "passwd").
+	return filepath.Base(name)
 }
 
 // Param extracts a named URL path parameter and converts it to the requested type.
