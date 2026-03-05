@@ -41,6 +41,7 @@ type rateLimiter struct {
 	visitors map[string]*visitor
 	max      int
 	window   time.Duration
+	stop     chan struct{}
 }
 
 func newRateLimiter(max int, window time.Duration) *rateLimiter {
@@ -48,10 +49,15 @@ func newRateLimiter(max int, window time.Duration) *rateLimiter {
 		visitors: make(map[string]*visitor),
 		max:      max,
 		window:   window,
+		stop:     make(chan struct{}),
 	}
 	go rl.cleanup()
 	return rl
 }
+
+// Stop terminates the background cleanup goroutine.
+// Call this when the middleware is no longer needed (e.g. in tests).
+func (rl *rateLimiter) Stop() { close(rl.stop) }
 
 func (rl *rateLimiter) allow(key string, now time.Time) (allowed bool, count int, resetTime time.Time) {
 	rl.mu.Lock()
@@ -74,15 +80,20 @@ func (rl *rateLimiter) allow(key string, now time.Time) (allowed bool, count int
 func (rl *rateLimiter) cleanup() {
 	ticker := time.NewTicker(2 * rl.window)
 	defer ticker.Stop()
-	for range ticker.C {
-		rl.mu.Lock()
-		now := time.Now()
-		for key, v := range rl.visitors {
-			if now.Sub(v.windowStart) >= rl.window {
-				delete(rl.visitors, key)
+	for {
+		select {
+		case <-ticker.C:
+			rl.mu.Lock()
+			now := time.Now()
+			for key, v := range rl.visitors {
+				if now.Sub(v.windowStart) >= rl.window {
+					delete(rl.visitors, key)
+				}
 			}
+			rl.mu.Unlock()
+		case <-rl.stop:
+			return
 		}
-		rl.mu.Unlock()
 	}
 }
 
