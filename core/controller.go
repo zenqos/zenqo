@@ -1,7 +1,10 @@
 package core
 
 import (
+	"fmt"
 	"net/http"
+
+	zlog "github.com/zenqos/zenqo/internal/log"
 )
 
 // RouteDocMeta holds optional OpenAPI documentation metadata for a route.
@@ -199,7 +202,7 @@ func adapt(method string, h HandlerFunc, errHandler ErrorHandlerFunc) http.Handl
 			errHandler(w, r, err)
 			return
 		}
-		if data == nil {
+		if data == nil || method == "DELETE" {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -268,6 +271,8 @@ func (bc *BaseController) RegisterRoutes(r Router) {
 				r.Patch(route.Path, h.ServeHTTP)
 			case "DELETE":
 				r.Delete(route.Path, h.ServeHTTP)
+			default:
+				zlog.Warn("RegisterRoutes", fmt.Sprintf("unsupported HTTP method %q for path %q — route not registered", route.Method, route.Path))
 			}
 		}
 	})
