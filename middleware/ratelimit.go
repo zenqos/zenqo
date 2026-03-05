@@ -97,28 +97,36 @@ func (rl *rateLimiter) cleanup() {
 	}
 }
 
-// RateLimit returns a middleware that enforces request rate limiting
-// using a fixed-window counter algorithm.
-//
-// Call with no arguments for the default configuration (100 req/min per IP),
-// or pass a RateLimitConfig to customize.
-//
-// Response headers set on every request:
-//   - X-RateLimit-Limit: maximum requests per window
-//   - X-RateLimit-Remaining: remaining requests in the current window
-//   - X-RateLimit-Reset: Unix timestamp when the window resets
-//
-// When the limit is exceeded, the middleware also sets:
-//   - Retry-After: seconds until the window resets
+// RateLimiter is a rate limiter with explicit lifecycle management.
+// Use NewRateLimiter when you need to call Stop() (e.g. in tests to avoid goroutine leaks).
+// For simple use cases, prefer RateLimit().
 //
 // Example:
 //
-//	app.Use(middleware.RateLimit())                                   // 100 req/min per IP
-//	app.Use(middleware.RateLimit(middleware.RateLimitConfig{          // custom
-//	    Max:    10,
-//	    Window: time.Second,
-//	}))
-func RateLimit(configs ...RateLimitConfig) func(http.Handler) http.Handler {
+//	rl := middleware.NewRateLimiter(middleware.RateLimitConfig{Max: 10, Window: time.Second})
+//	app.Use(rl.Middleware())
+//	defer rl.Stop() // terminates the background cleanup goroutine
+type RateLimiter struct {
+	rl  *rateLimiter
+	cfg RateLimitConfig
+}
+
+// NewRateLimiter creates a RateLimiter with the given configuration.
+func NewRateLimiter(configs ...RateLimitConfig) *RateLimiter {
+	cfg := resolveCfg(configs)
+	return &RateLimiter{rl: newRateLimiter(cfg.Max, cfg.Window), cfg: cfg}
+}
+
+// Middleware returns the rate-limiting http middleware for this RateLimiter.
+func (lim *RateLimiter) Middleware() func(http.Handler) http.Handler {
+	return buildMiddleware(lim.rl, lim.cfg)
+}
+
+// Stop terminates the background cleanup goroutine.
+// Call this when the middleware is no longer needed (e.g. in tests).
+func (lim *RateLimiter) Stop() { lim.rl.Stop() }
+
+func resolveCfg(configs []RateLimitConfig) RateLimitConfig {
 	cfg := DefaultRateLimitConfig()
 	if len(configs) > 0 {
 		cfg = configs[0]
@@ -135,9 +143,10 @@ func RateLimit(configs ...RateLimitConfig) func(http.Handler) http.Handler {
 			cfg.OnLimit = DefaultRateLimitConfig().OnLimit
 		}
 	}
+	return cfg
+}
 
-	rl := newRateLimiter(cfg.Max, cfg.Window)
-
+func buildMiddleware(rl *rateLimiter, cfg RateLimitConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := cfg.KeyFunc(r)
@@ -165,4 +174,31 @@ func RateLimit(configs ...RateLimitConfig) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// RateLimit returns a middleware that enforces request rate limiting
+// using a fixed-window counter algorithm.
+//
+// Call with no arguments for the default configuration (100 req/min per IP),
+// or pass a RateLimitConfig to customize.
+//
+// Response headers set on every request:
+//   - X-RateLimit-Limit: maximum requests per window
+//   - X-RateLimit-Remaining: remaining requests in the current window
+//   - X-RateLimit-Reset: Unix timestamp when the window resets
+//
+// When the limit is exceeded, the middleware also sets:
+//   - Retry-After: seconds until the window resets
+//
+// Example:
+//
+//	app.Use(middleware.RateLimit())                                   // 100 req/min per IP
+//	app.Use(middleware.RateLimit(middleware.RateLimitConfig{          // custom
+//	    Max:    10,
+//	    Window: time.Second,
+//	}))
+func RateLimit(configs ...RateLimitConfig) func(http.Handler) http.Handler {
+	cfg := resolveCfg(configs)
+	rl := newRateLimiter(cfg.Max, cfg.Window)
+	return buildMiddleware(rl, cfg)
 }
