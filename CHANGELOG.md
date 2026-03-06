@@ -1,5 +1,34 @@
 # Changelog
 
+## [v0.0.4] - 2026-03-06
+
+### Features
+
+#### `GuardToMiddleware` accepts optional `ErrorHandlerFunc` (`core/middleware.go`) (#50)
+`GuardToMiddleware` now accepts a variadic `ErrorHandlerFunc` parameter. When provided, the handler is called on guard failure instead of returning a default `403 Forbidden` response. This allows fine-grained error responses per middleware without modifying the guard itself.
+
+#### Expose `RateLimiter` type with `Middleware()` and `Stop()` (`middleware/ratelimit.go`) (#47)
+`NewRateLimiter` now returns a `*RateLimiter` instead of `func(http.Handler) http.Handler`. Call `.Middleware()` to get the middleware handler and `.Stop()` to cleanly shut down the background cleanup goroutine. This enables lifecycle management of rate limiters in long-running applications and tests.
+
+### Bug Fixes
+
+#### `UseStatic` respects global prefix and `Logger` registered before routes (`core/app.go`) (#49 #51)
+- `UseStatic` now correctly prepends the app's global prefix when registering the static file route, preventing 404s when a base path is configured.
+- `Logger` middleware registered via `Use()` before route registration is now applied correctly to all routes.
+
+#### `BindFiles` hides internal error details (`core/request.go`) (#52)
+Internal file-parsing errors from `BindFiles` no longer expose implementation details to the client. A generic error message is returned instead, preventing unintentional information leakage.
+
+#### `RegisterRoutes` logs warning for unsupported HTTP methods (`core/controller.go`) (#46)
+`RegisterRoutes` now emits a `zlog.Warn` when it encounters an unrecognized HTTP method string, making misconfigured routes visible in logs instead of silently being skipped.
+
+### Documentation
+
+#### Bilingual documentation added (`README.md`, `docs/`)
+Full Korean translation of the README and guides added alongside the existing English documentation.
+
+---
+
 ## [v0.0.3] - 2026-03-05
 
 ### Security Hardening
