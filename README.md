@@ -1,3 +1,7 @@
+<p align="right">
+  <b>English</b> | <a href="README.ko.md">한국어</a>
+</p>
+
 <p align="center">
   <img src="./assets/logo-wordmark.svg" alt="Zenqo" width="260" />
 </p>
@@ -19,26 +23,10 @@ Under the hood, Zenqo uses <a href="https://github.com/go-chi/chi" target="_blan
 
 ## Philosophy
 
-Go's standard library gives you full control over HTTP, but that control comes with repetition. Every handler manually sets headers, encodes JSON, picks status codes, and writes error responses. The logic that matters — your business code — gets buried.
-
-Zenqo takes a different approach. Handlers are pure functions that return values. The framework decides how to respond. This means less boilerplate, consistent API responses, and a clear separation between what your code does and how it's delivered.
+Handlers are pure functions that return `(data, error)`. The framework handles JSON serialization, status codes, and error responses — so your code stays focused on business logic.
 
 ```go
-// Standard Go — you manage everything
-func getUser(w http.ResponseWriter, r *http.Request) {
-    user, err := svc.FindByID(id)
-    if err != nil {
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(404)
-        json.NewEncoder(w).Encode(map[string]any{"code": 404, "message": "not found"})
-        return
-    }
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(200)
-    json.NewEncoder(w).Encode(map[string]any{"success": true, "data": user})
-}
-
-// Zenqo — you focus on logic
+// Zenqo
 func getUser(r *http.Request) (any, error) {
     user, err := svc.FindByID(id)
     if err != nil {
@@ -50,49 +38,13 @@ func getUser(r *http.Request) (any, error) {
 
 ## Getting Started
 
-### Install the CLI
-
 ```bash
-# with Go
 go install github.com/zenqos/zenqo/cmd/zenqo@latest
-
-# or Homebrew
-brew install zenqos/tap/zenqo
-```
-
-### Scaffold a New Project
-
-```bash
 zenqo new my-app
 cd my-app && go run .
 ```
 
-### Hello World
-
-```go
-package main
-
-import (
-    "log"
-    "net/http"
-    "github.com/zenqos/zenqo/core"
-)
-
-func main() {
-    app := core.NewApp()
-
-    app.GET("/", func(r *http.Request) (any, error) {
-        return map[string]string{"message": "Hello, Zenqo!"}, nil
-    })
-
-    log.Fatal(app.Start(":3000"))
-}
-```
-
-```bash
-curl http://localhost:3000/
-# { "success": true, "data": { "message": "Hello, Zenqo!" } }
-```
+→ Full guide: [Getting Started](./docs/getting-started.md)
 
 ## Features
 
@@ -112,7 +64,17 @@ curl http://localhost:3000/
 
 ## Documentation
 
-- [CHANGELOG](./CHANGELOG.md) — detailed feature breakdown and version history
+| Topic | EN | KO |
+|-------|----|----|
+| Getting Started | [→](./docs/getting-started.md) | [→](./docs/getting-started.ko.md) |
+| Controllers | [→](./docs/controllers.md) | [→](./docs/controllers.ko.md) |
+| Request Binding | [→](./docs/request-binding.md) | [→](./docs/request-binding.ko.md) |
+| Error Handling | [→](./docs/error-handling.md) | [→](./docs/error-handling.ko.md) |
+| Guards & Interceptors | [→](./docs/guards-interceptors.md) | [→](./docs/guards-interceptors.ko.md) |
+| Middleware | [→](./docs/middleware.md) | [→](./docs/middleware.ko.md) |
+| OpenAPI | [→](./docs/openapi.md) | [→](./docs/openapi.ko.md) |
+
+- [CHANGELOG](./CHANGELOG.md) — version history
 - [pkg.go.dev](https://pkg.go.dev/github.com/zenqos/zenqo) — API reference (GoDoc)
 
 ## Contributors

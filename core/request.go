@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	zlog "github.com/zenqos/zenqo/internal/log"
 )
 
 // MaxBodySize is the maximum allowed request body size for Bind.
@@ -125,7 +127,8 @@ func BindFile(r *http.Request, field string) (*UploadedFile, error) {
 //	}
 func BindFiles(r *http.Request, field string) ([]*UploadedFile, error) {
 	if err := r.ParseMultipartForm(MaxUploadSize); err != nil {
-		return nil, ErrBadRequest("failed to parse multipart form: " + err.Error())
+		zlog.Err("BindFiles", err.Error())
+		return nil, ErrBadRequest("invalid multipart form")
 	}
 	fhs := r.MultipartForm.File[field]
 	if len(fhs) == 0 {

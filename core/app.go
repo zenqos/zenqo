@@ -142,11 +142,13 @@ func (a *App) PATCH(path string, h HandlerFunc) *RouteDefinition { return a.root
 func (a *App) DELETE(path string, h HandlerFunc) *RouteDefinition { return a.root.DELETE(path, h) }
 
 // UseStatic serves files from dir under the given URL prefix.
+// The global prefix set via SetGlobalPrefix is automatically prepended.
 // Example: UseStatic("/", "./public") serves index.html, CSS, JS, etc.
 func (a *App) UseStatic(prefix, dir string) *App {
 	fs := http.FileServer(http.Dir(dir))
-	a.adapter.Handle(prefix, http.StripPrefix(prefix, fs))
-	a.adapter.Handle(prefix+"/*", http.StripPrefix(prefix, fs))
+	fullPrefix := a.prefix + prefix
+	a.adapter.Handle(fullPrefix, http.StripPrefix(fullPrefix, fs))
+	a.adapter.Handle(fullPrefix+"/*", http.StripPrefix(fullPrefix, fs))
 	return a
 }
 
@@ -211,6 +213,7 @@ func (a *App) buildRoutes() {
 
 func (a *App) Start(addr string) error {
 	started := time.Now()
+	a.adapter.Use(middleware.Logger)
 	a.buildRoutes()
 
 	zlog.Log("Boot", "Starting application...")
@@ -239,8 +242,6 @@ func (a *App) Start(addr string) error {
 	}
 	elapsed := time.Since(started).Milliseconds()
 	zlog.Log("Server", fmt.Sprintf("Listening on %s  +%dms", host, elapsed))
-
-	a.adapter.Use(middleware.Logger)
 
 	srv := &http.Server{
 		Addr:         addr,

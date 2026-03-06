@@ -12,12 +12,29 @@ import (
 // GuardToMiddleware converts a Guard into a standard MiddlewareFunc
 // so it can be applied at the router or controller level.
 //
+// An optional ErrorHandlerFunc can be passed to route rejections through
+// a custom error handler (e.g. for RFC 9457 problem+json responses).
+// When omitted, the default HTTP error format is used.
+//
 // Status code logic:
 //   - (true, _)            → next handler runs
 //   - (false, *HTTPError)  → responds with the HTTPError's Status and Message
 //   - (false, nil)         → 403 Forbidden
 //   - (false, other error) → 500 Internal Server Error
-func GuardToMiddleware(g Guard) MiddlewareFunc {
+func GuardToMiddleware(g Guard, errHandler ...ErrorHandlerFunc) MiddlewareFunc {
+	if len(errHandler) > 0 && errHandler[0] != nil {
+		eh := errHandler[0]
+		return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				allowed, err := g.CanActivate(r)
+				if !allowed {
+					guardRejectWith(w, r, err, eh)
+					return
+				}
+				next.ServeHTTP(w, r)
+			})
+		}
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			allowed, err := g.CanActivate(r)
