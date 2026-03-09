@@ -7,7 +7,9 @@ type openAPICtrl struct {
 }
 
 // swaggerUIHTML is a minimal Swagger UI page that loads from jsDelivr CDN.
-// Format args: %s = API title, %s = spec URL path.
+// Format args:
+//   - %s = API title (HTML-escaped)
+//   - %s = spec URL (JSON-encoded string literal, including surrounding quotes)
 const swaggerUIHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,7 +24,7 @@ const swaggerUIHTML = `<!DOCTYPE html>
   <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
   <script>
     SwaggerUIBundle({
-      url: '%s',
+      url: %s,
       dom_id: '#swagger-ui',
       deepLinking: true,
       presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
