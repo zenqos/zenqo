@@ -2,7 +2,9 @@ package middleware
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -57,7 +59,8 @@ func DefaultCSRFConfig() CSRFConfig {
 // How it works:
 //  1. On any request, if no CSRF cookie is present a new random token is set.
 //  2. For state-mutating methods (POST, PUT, PATCH, DELETE) the middleware
-//     validates that the X-CSRF-Token request header matches the cookie value.
+//     validates that the X-CSRF-Token request header matches the cookie value
+//     using a constant-time comparison to prevent timing-based side channels.
 //  3. Requests with Authorization: Bearer are exempt (stateless API clients).
 //
 // Frontend usage — include the cookie value in every mutating request:
@@ -116,7 +119,14 @@ func CSRF(configs ...CSRFConfig) func(http.Handler) http.Handler {
 				token = cookie.Value
 			}
 			if token == "" {
-				token = csrfGenerateToken()
+				var err error
+				token, err = csrfGenerateToken()
+				if err != nil {
+					// crypto/rand is unavailable — fail closed rather than
+					// silently degrading to weak entropy.
+					http.Error(w, `{"code":500,"message":"internal server error"}`, http.StatusInternalServerError)
+					return
+				}
 				http.SetCookie(w, &http.Cookie{
 					Name:     cfg.CookieName,
 					Value:    token,
@@ -130,9 +140,13 @@ func CSRF(configs ...CSRFConfig) func(http.Handler) http.Handler {
 			}
 
 			// Validate token on state-mutating methods.
+			// subtle.ConstantTimeCompare prevents timing-based side channels
+			// that could theoretically leak token bytes in controlled environments.
 			if !safeMethods[r.Method] {
 				headerToken := r.Header.Get(cfg.HeaderName)
-				if headerToken == "" || headerToken != token {
+				tokenMatch := len(headerToken) > 0 &&
+					subtle.ConstantTimeCompare([]byte(headerToken), []byte(token)) == 1
+				if !tokenMatch {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusForbidden)
 					w.Write([]byte(`{"code":403,"message":"invalid or missing CSRF token"}`)) //nolint:errcheck
@@ -145,11 +159,13 @@ func CSRF(configs ...CSRFConfig) func(http.Handler) http.Handler {
 	}
 }
 
-func csrfGenerateToken() string {
+// csrfGenerateToken generates a cryptographically random CSRF token.
+// Returns an error if the OS random source is unavailable — callers must
+// handle this and fail closed rather than falling back to weak entropy.
+func csrfGenerateToken() (string, error) {
 	b := make([]byte, csrfTokenBytes)
 	if _, err := rand.Read(b); err != nil {
-		// Extremely rare: fall back to time-based entropy.
-		return base64.URLEncoding.EncodeToString([]byte(time.Now().String()))
+		return "", errors.New("csrf: failed to generate secure random token")
 	}
-	return base64.URLEncoding.EncodeToString(b)
+	return base64.URLEncoding.EncodeToString(b), nil
 }
