@@ -146,6 +146,14 @@ func checkOneOf(param string, fv reflect.Value, field string) string {
 	return fmt.Sprintf("%s must be one of: %s", field, strings.Join(trimmed, ", "))
 }
 
+// checkURL validates that the field is a syntactically valid absolute URL with
+// an http or https scheme and a non-empty host. Embedded credentials (user:pass@)
+// are rejected.
+//
+// NOTE: This rule validates URL *format only* — it does not enforce an allowlist
+// of permitted hosts. If this field is used for redirects or backend requests,
+// always validate the host against an explicit allowlist in your handler to
+// prevent open-redirect or SSRF vulnerabilities.
 func checkURL(fv reflect.Value, field string) string {
 	if fv.Kind() != reflect.String {
 		return ""
