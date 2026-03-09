@@ -9,71 +9,26 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync/atomic"
 
 	zlog "github.com/zenqos/zenqo/internal/log"
 )
 
-// maxBodySizeVal is the maximum allowed request body size for Bind.
-// Default is 1 MB. Use SetMaxBodySize / MaxBodySizeValue to access safely.
-var maxBodySizeVal atomic.Int64
-
-// maxUploadSizeVal is the maximum allowed multipart form size for file uploads.
-// Default is 32 MB. Use SetMaxUploadSize / MaxUploadSizeValue to access safely.
-var maxUploadSizeVal atomic.Int64
-
-// maxFileCountVal is the maximum number of files accepted in a single BindFiles call.
-// Default is 20. Use SetMaxFileCount / MaxFileCountValue to access safely.
-var maxFileCountVal atomic.Int64
-
-// maxSingleFileSizeVal is the maximum allowed size for a single uploaded file.
-// Default is 10 MB. Use SetMaxSingleFileSize / MaxSingleFileSizeValue to access safely.
-var maxSingleFileSizeVal atomic.Int64
-
-func init() {
-	maxBodySizeVal.Store(1 << 20)    // 1 MB
-	maxUploadSizeVal.Store(32 << 20) // 32 MB
-	maxFileCountVal.Store(20)
-	maxSingleFileSizeVal.Store(10 << 20) // 10 MB
-}
-
 // MaxBodySize is the maximum allowed request body size for Bind.
-// Deprecated: use SetMaxBodySize / MaxBodySizeValue for concurrent-safe access.
-// Setting this variable directly is safe only before app.Start() is called.
+// Default is 1 MB. Set to 0 to disable the limit.
+// Configure this before calling app.Start() to avoid data races.
 var MaxBodySize int64 = 1 << 20
 
 // MaxUploadSize is the maximum allowed multipart form size for file uploads.
-// Deprecated: use SetMaxUploadSize / MaxUploadSizeValue for concurrent-safe access.
-// Setting this variable directly is safe only before app.Start() is called.
+// Default is 32 MB. Configure before app.Start() to avoid data races.
 var MaxUploadSize int64 = 32 << 20
 
-// SetMaxBodySize sets the request body size limit used by Bind.
-// Safe to call from any goroutine.
-func SetMaxBodySize(n int64) { maxBodySizeVal.Store(n); MaxBodySize = n }
+// MaxFileCount is the maximum number of files accepted in a single BindFiles call.
+// Default is 20. Set to 0 to disable the limit.
+var MaxFileCount int = 20
 
-// MaxBodySizeValue returns the current request body size limit.
-func MaxBodySizeValue() int64 { return maxBodySizeVal.Load() }
-
-// SetMaxUploadSize sets the multipart form size limit used by BindFile / BindFiles.
-// Safe to call from any goroutine.
-func SetMaxUploadSize(n int64) { maxUploadSizeVal.Store(n); MaxUploadSize = n }
-
-// MaxUploadSizeValue returns the current multipart form size limit.
-func MaxUploadSizeValue() int64 { return maxUploadSizeVal.Load() }
-
-// SetMaxFileCount sets the maximum number of files accepted per BindFiles call.
-// Default is 20. Safe to call from any goroutine.
-func SetMaxFileCount(n int) { maxFileCountVal.Store(int64(n)) }
-
-// MaxFileCountValue returns the current per-request file count limit.
-func MaxFileCountValue() int { return int(maxFileCountVal.Load()) }
-
-// SetMaxSingleFileSize sets the maximum size for a single uploaded file.
-// Default is 10 MB. Safe to call from any goroutine.
-func SetMaxSingleFileSize(n int64) { maxSingleFileSizeVal.Store(n) }
-
-// MaxSingleFileSizeValue returns the current single-file size limit.
-func MaxSingleFileSizeValue() int64 { return maxSingleFileSizeVal.Load() }
+// MaxSingleFileSize is the maximum allowed size for a single uploaded file.
+// Default is 10 MB. Set to 0 to disable the limit.
+var MaxSingleFileSize int64 = 10 << 20
 
 // Bind decodes the JSON request body into T.
 // Returns ErrBadRequest automatically if the body is missing or malformed —
@@ -94,10 +49,9 @@ func Bind[T any](r *http.Request) (T, error) {
 	if ct != "" && !strings.HasPrefix(ct, "application/json") {
 		return v, ErrBadRequest("Content-Type must be application/json")
 	}
-	limit := maxBodySizeVal.Load()
 	body := io.Reader(r.Body)
-	if limit > 0 {
-		body = io.LimitReader(r.Body, limit)
+	if MaxBodySize > 0 {
+		body = io.LimitReader(r.Body, MaxBodySize)
 	}
 	err := json.NewDecoder(body).Decode(&v)
 	// Always drain any remaining bytes so keep-alive connections are not stalled.
@@ -177,10 +131,10 @@ func BindFile(r *http.Request, field string) (*UploadedFile, error) {
 // uploaded under the given form field name.
 // Returns a nil slice (and no error) when the field is absent.
 //
-// Per-request limits:
-//   - Total form size: MaxUploadSizeValue() (default 32 MB)
-//   - Maximum files per request: MaxFileCountValue() (default 20)
-//   - Maximum size per file: MaxSingleFileSizeValue() (default 10 MB)
+// Per-request limits (configurable via package-level vars):
+//   - Total form size: MaxUploadSize (default 32 MB)
+//   - Maximum files per request: MaxFileCount (default 20)
+//   - Maximum size per file: MaxSingleFileSize (default 10 MB)
 //
 // Example:
 //
@@ -189,7 +143,7 @@ func BindFile(r *http.Request, field string) (*UploadedFile, error) {
 //		// process f.Content
 //	}
 func BindFiles(r *http.Request, field string) ([]*UploadedFile, error) {
-	if err := r.ParseMultipartForm(maxUploadSizeVal.Load()); err != nil {
+	if err := r.ParseMultipartForm(MaxUploadSize); err != nil {
 		zlog.Err("BindFiles", err.Error())
 		return nil, ErrBadRequest("invalid multipart form")
 	}
@@ -197,15 +151,13 @@ func BindFiles(r *http.Request, field string) ([]*UploadedFile, error) {
 	if len(fhs) == 0 {
 		return nil, nil
 	}
-	maxCount := maxFileCountVal.Load()
-	if int64(len(fhs)) > maxCount {
-		return nil, ErrBadRequest(fmt.Sprintf("too many files: maximum %d files per request", maxCount))
+	if MaxFileCount > 0 && len(fhs) > MaxFileCount {
+		return nil, ErrBadRequest(fmt.Sprintf("too many files: maximum %d files per request", MaxFileCount))
 	}
-	maxSingle := maxSingleFileSizeVal.Load()
 	result := make([]*UploadedFile, 0, len(fhs))
 	for _, fh := range fhs {
-		if maxSingle > 0 && fh.Size > maxSingle {
-			return nil, ErrBadRequest(fmt.Sprintf("file %q exceeds maximum size of %d bytes", fh.Filename, maxSingle))
+		if MaxSingleFileSize > 0 && fh.Size > MaxSingleFileSize {
+			return nil, ErrBadRequest(fmt.Sprintf("file %q exceeds maximum size of %d bytes", fh.Filename, MaxSingleFileSize))
 		}
 		f, err := fh.Open()
 		if err != nil {
