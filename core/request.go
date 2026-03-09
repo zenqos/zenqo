@@ -15,7 +15,20 @@ import (
 
 // MaxBodySize is the maximum allowed request body size for Bind.
 // Default is 1 MB. Set to 0 to disable the limit.
+// Configure this before calling app.Start() to avoid data races.
 var MaxBodySize int64 = 1 << 20
+
+// MaxUploadSize is the maximum allowed multipart form size for file uploads.
+// Default is 32 MB. Configure before app.Start() to avoid data races.
+var MaxUploadSize int64 = 32 << 20
+
+// MaxFileCount is the maximum number of files accepted in a single BindFiles call.
+// Default is 20. Set to 0 to disable the limit.
+var MaxFileCount int = 20
+
+// MaxSingleFileSize is the maximum allowed size for a single uploaded file.
+// Default is 10 MB. Set to 0 to disable the limit.
+var MaxSingleFileSize int64 = 10 << 20
 
 // Bind decodes the JSON request body into T.
 // Returns ErrBadRequest automatically if the body is missing or malformed —
@@ -40,7 +53,10 @@ func Bind[T any](r *http.Request) (T, error) {
 	if MaxBodySize > 0 {
 		body = io.LimitReader(r.Body, MaxBodySize)
 	}
-	if err := json.NewDecoder(body).Decode(&v); err != nil {
+	err := json.NewDecoder(body).Decode(&v)
+	// Always drain any remaining bytes so keep-alive connections are not stalled.
+	_, _ = io.Copy(io.Discard, body)
+	if err != nil {
 		return v, ErrBadRequest("invalid request body")
 	}
 	if err := validate(v); err != nil {
@@ -67,10 +83,6 @@ func BindQuery(r *http.Request, key string) string {
 func BindHeader(r *http.Request, key string) string {
 	return r.Header.Get(key)
 }
-
-// MaxUploadSize is the maximum allowed multipart form size for file uploads.
-// Default is 32 MB. Override before calling BindFile / BindFiles if needed.
-var MaxUploadSize int64 = 32 << 20
 
 // UploadedFile holds metadata and content of a single uploaded file.
 type UploadedFile struct {
@@ -119,6 +131,11 @@ func BindFile(r *http.Request, field string) (*UploadedFile, error) {
 // uploaded under the given form field name.
 // Returns a nil slice (and no error) when the field is absent.
 //
+// Per-request limits (configurable via package-level vars):
+//   - Total form size: MaxUploadSize (default 32 MB)
+//   - Maximum files per request: MaxFileCount (default 20)
+//   - Maximum size per file: MaxSingleFileSize (default 10 MB)
+//
 // Example:
 //
 //	files, err := core.BindFiles(r, "images")
@@ -134,8 +151,14 @@ func BindFiles(r *http.Request, field string) ([]*UploadedFile, error) {
 	if len(fhs) == 0 {
 		return nil, nil
 	}
+	if MaxFileCount > 0 && len(fhs) > MaxFileCount {
+		return nil, ErrBadRequest(fmt.Sprintf("too many files: maximum %d files per request", MaxFileCount))
+	}
 	result := make([]*UploadedFile, 0, len(fhs))
 	for _, fh := range fhs {
+		if MaxSingleFileSize > 0 && fh.Size > MaxSingleFileSize {
+			return nil, ErrBadRequest(fmt.Sprintf("file %q exceeds maximum size of %d bytes", fh.Filename, MaxSingleFileSize))
+		}
 		f, err := fh.Open()
 		if err != nil {
 			return nil, ErrInternal("failed to open uploaded file")
@@ -209,4 +232,31 @@ func Param[T interface {
 	default:
 		return zero, ErrBadRequest(fmt.Sprintf("unsupported parameter type for %q", key))
 	}
+}
+
+// MustParam extracts a named URL path parameter, converts it to the requested type,
+// and writes a 400 Bad Request response if the parameter is missing or invalid.
+// Returns the parsed value and true on success, zero value and false on failure.
+//
+// This is a convenience wrapper around Param that handles the error response
+// automatically, avoiding repetitive error-checking boilerplate.
+//
+// Example:
+//
+//	func (c *Controller) get(w http.ResponseWriter, r *http.Request) {
+//		id, ok := core.MustParam[int64](w, r, "id")
+//		if !ok {
+//			return  // 400 already written
+//		}
+//		// use id safely
+//	}
+func MustParam[T interface {
+	string | int | int64 | uint | uint64
+}](w http.ResponseWriter, r *http.Request, key string) (T, bool) {
+	val, err := Param[T](r, key)
+	if err != nil {
+		BadRequest(w, err.Error())
+		return val, false
+	}
+	return val, true
 }

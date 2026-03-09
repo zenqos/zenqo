@@ -136,12 +136,14 @@ func checkOneOf(param string, fv reflect.Value, field string) string {
 		return ""
 	}
 	allowed := strings.Split(param, "|")
-	for _, a := range allowed {
-		if s == a {
+	trimmed := make([]string, len(allowed))
+	for i, a := range allowed {
+		trimmed[i] = strings.TrimSpace(a)
+		if s == trimmed[i] {
 			return ""
 		}
 	}
-	return fmt.Sprintf("%s must be one of: %s", field, strings.Join(allowed, ", "))
+	return fmt.Sprintf("%s must be one of: %s", field, strings.Join(trimmed, ", "))
 }
 
 func checkURL(fv reflect.Value, field string) string {

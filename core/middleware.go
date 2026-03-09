@@ -134,12 +134,26 @@ func applyInterceptor(i Interceptor, next http.HandlerFunc) http.HandlerFunc {
 // responses (SSE) and connection upgrades (WebSocket) work correctly.
 type statusWriter struct {
 	http.ResponseWriter
-	statusCode int
+	statusCode  int
+	wroteHeader bool
 }
 
 func (sw *statusWriter) WriteHeader(code int) {
-	sw.statusCode = code
+	if !sw.wroteHeader {
+		sw.statusCode = code
+		sw.wroteHeader = true
+	}
 	sw.ResponseWriter.WriteHeader(code)
+}
+
+// Write overrides the default Write to track whether any response has been started,
+// even when WriteHeader is not called explicitly (implicit 200).
+func (sw *statusWriter) Write(b []byte) (int, error) {
+	if !sw.wroteHeader {
+		sw.statusCode = http.StatusOK
+		sw.wroteHeader = true
+	}
+	return sw.ResponseWriter.Write(b)
 }
 
 // Flush implements http.Flusher, enabling streaming responses such as SSE.

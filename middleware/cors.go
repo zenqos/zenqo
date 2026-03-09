@@ -55,11 +55,17 @@ func CORS(configs ...CORSConfig) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
 
+			// Always declare Vary: Origin when the response can differ by origin.
+			// Without this, CDNs and reverse proxies may cache a response intended
+			// for one origin and serve it to another (cache poisoning).
+			if origin != "" {
+				w.Header().Add("Vary", "Origin")
+			}
+
 			if allowAll {
 				w.Header().Set("Access-Control-Allow-Origin", "*")
 			} else if originSet[origin] {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Vary", "Origin")
 			}
 
 			if cfg.AllowCredentials {
