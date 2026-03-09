@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
@@ -46,8 +47,14 @@ var MaxSingleFileSize int64 = 10 << 20
 func Bind[T any](r *http.Request) (T, error) {
 	var v T
 	ct := r.Header.Get("Content-Type")
-	if ct != "" && !strings.HasPrefix(ct, "application/json") {
-		return v, ErrBadRequest("Content-Type must be application/json")
+	if ct != "" {
+		// Parse the media type properly so that "application/json; charset=utf-8"
+		// is accepted but "application/json-patch+json" or "application/jsonl" are
+		// correctly rejected.
+		mediaType, _, err := mime.ParseMediaType(ct)
+		if err != nil || mediaType != "application/json" {
+			return v, ErrBadRequest("Content-Type must be application/json")
+		}
 	}
 	body := io.Reader(r.Body)
 	if MaxBodySize > 0 {

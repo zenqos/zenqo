@@ -41,11 +41,21 @@ func CORS(configs ...CORSConfig) func(http.Handler) http.Handler {
 		cfg = configs[0]
 	}
 
+	// Guard against the invalid combination of wildcard origin + credentials.
+	// The CORS spec (RFC 9110 / Fetch) forbids this: browsers reject responses
+	// that set both Access-Control-Allow-Origin: * and
+	// Access-Control-Allow-Credentials: true, making credentials inaccessible.
+	// Catching it at startup prevents silent misconfiguration.
+	allowAll := len(cfg.AllowOrigins) == 1 && cfg.AllowOrigins[0] == "*"
+	if allowAll && cfg.AllowCredentials {
+		panic("cors: AllowCredentials cannot be true when AllowOrigins is [\"*\"]. " +
+			"Specify explicit origins instead (e.g. []string{\"https://myapp.com\"}).")
+	}
+
 	methods := strings.Join(cfg.AllowMethods, ", ")
 	headers := strings.Join(cfg.AllowHeaders, ", ")
 	maxAge := strconv.Itoa(cfg.MaxAge)
 
-	allowAll := len(cfg.AllowOrigins) == 1 && cfg.AllowOrigins[0] == "*"
 	originSet := make(map[string]bool, len(cfg.AllowOrigins))
 	for _, o := range cfg.AllowOrigins {
 		originSet[o] = true
