@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	zlog "github.com/zenqos/zenqo/internal/log"
@@ -19,8 +20,16 @@ func Logger(next http.Handler) http.Handler {
 		next.ServeHTTP(sw, r)
 		elapsed := time.Since(start)
 		zlog.Log("HTTP", fmt.Sprintf("%-6s %s  %d  %s",
-			r.Method, r.URL.Path, sw.statusCode, elapsed.Round(time.Microsecond)))
+			r.Method, sanitizeLogValue(r.URL.Path), sw.statusCode, elapsed.Round(time.Microsecond)))
 	})
+}
+
+// sanitizeLogValue replaces newline and carriage-return characters with their
+// escape sequences to prevent log injection attacks via crafted URL paths.
+func sanitizeLogValue(s string) string {
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	return s
 }
 
 // logStatusWriter captures the status code written by downstream handlers.
