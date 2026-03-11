@@ -342,3 +342,58 @@ func TestSetShutdownTimeoutUpdates(t *testing.T) {
 		t.Fatalf("expected shutdownTimeout 60s after SetShutdownTimeout, got %v", app.shutdownTimeout)
 	}
 }
+
+// --- Issue #48: DELETE with non-nil data must still return 204 ---
+
+func TestAppDELETEWithDataReturns204(t *testing.T) {
+	app := NewApp()
+	app.DELETE("/items/{id}", func(r *http.Request) (any, error) {
+		// Returning data from a DELETE handler must still produce 204 No Content.
+		return map[string]string{"deleted": "true"}, nil
+	})
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("DELETE", "/items/1", nil)
+	app.Handler().ServeHTTP(w, r)
+
+	if w.Code != 204 {
+		t.Fatalf("expected 204 for DELETE with data, got %d", w.Code)
+	}
+	if body := w.Body.String(); body != "" {
+		t.Fatalf("expected empty body for 204, got %q", body)
+	}
+}
+
+// --- Issue #41: multiple App instances must not interfere via URLParam ---
+
+func TestURLParamIsolatedAcrossApps(t *testing.T) {
+	// Creating a second App must not break URL param resolution in the first.
+	// With the old package-level urlParamFn, the second NewAppWith call would
+	// overwrite the fn used by all previous App instances.
+	var capturedID string
+
+	app1 := NewApp()
+	app1.GET("/users/{id}", func(r *http.Request) (any, error) {
+		capturedID = URLParam(r, "id")
+		return capturedID, nil
+	})
+	h1 := app1.Handler()
+
+	// Create a second App — must not corrupt app1's URLParam resolution.
+	app2 := NewApp()
+	app2.GET("/posts/{slug}", func(r *http.Request) (any, error) {
+		return URLParam(r, "slug"), nil
+	})
+	_ = app2.Handler()
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/users/42", nil)
+	h1.ServeHTTP(w, r)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if capturedID != "42" {
+		t.Fatalf("expected URLParam id=42, got %q", capturedID)
+	}
+}
