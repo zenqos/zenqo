@@ -95,17 +95,9 @@ func guardReject(w http.ResponseWriter, err error) {
 
 // guardToMiddleware converts a Guard into a MiddlewareFunc that routes
 // rejections through the given ErrorHandlerFunc.
+// Delegates to GuardToMiddleware to avoid duplicating rejection logic.
 func guardToMiddleware(g Guard, errHandler ErrorHandlerFunc) MiddlewareFunc {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			allowed, err := g.CanActivate(r)
-			if !allowed {
-				guardRejectWith(w, r, err, errHandler)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
+	return GuardToMiddleware(g, errHandler)
 }
 
 // guardRejectWith routes a guard rejection through the given error handler.
