@@ -108,7 +108,11 @@ func (rl *rateLimiter) allow(key string, now time.Time) (allowed bool, count int
 }
 
 func (rl *rateLimiter) cleanup() {
-	ticker := time.NewTicker(2 * rl.window)
+	// Run every window instead of every 2×window so expired entries are pruned
+	// sooner, bounding memory growth under high-traffic with many unique IPs.
+	// Entries are still kept for 2 windows so prevCount remains valid for the
+	// sliding-window algorithm; only the cleanup frequency changes.
+	ticker := time.NewTicker(rl.window)
 	defer ticker.Stop()
 	for {
 		select {
