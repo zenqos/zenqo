@@ -36,11 +36,11 @@ type errorHandlerSetter interface {
 	setErrorHandler(ErrorHandlerFunc)
 }
 
-// urlParamFn is the package-level function used by URLParam.
-// It is set by NewAppWith to delegate to the active RouterAdapter.
-var urlParamFn = func(r *http.Request, key string) string {
-	return chi.URLParam(r, key)
-}
+// urlParamContextKey is the context key used to store the URL parameter resolver
+// for the active RouterAdapter. Using a per-request context value instead of a
+// package-level variable eliminates data races when multiple App instances coexist
+// (e.g. parallel tests each creating their own App).
+type urlParamContextKey struct{}
 
 // NewApp creates a new Zenqo application with sensible defaults:
 // request ID injection, real-IP resolution, panic recovery, and JSON 404/405 responses.
@@ -61,7 +61,15 @@ func NewAppWith(adapter RouterAdapter) *App {
 		Error(w, 405, "method not allowed")
 	})
 
-	urlParamFn = adapter.URLParam
+	// Capture the adapter's URLParam resolver and inject it into each request's
+	// context. This avoids a package-level variable that would be overwritten on
+	// every NewAppWith call, causing a data race when multiple App instances exist.
+	fn := adapter.URLParam
+	adapter.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), urlParamContextKey{}, fn)))
+		})
+	})
 
 	a := &App{adapter: adapter}
 	a.shutdownTimeout = 30 * time.Second
@@ -275,7 +283,10 @@ func (a *App) Handler() http.Handler {
 
 // URLParam extracts a named URL parameter set by the underlying router.
 func URLParam(r *http.Request, key string) string {
-	return urlParamFn(r, key)
+	if fn, ok := r.Context().Value(urlParamContextKey{}).(func(*http.Request, string) string); ok {
+		return fn(r, key)
+	}
+	return chi.URLParam(r, key)
 }
 
 // Zlog is the public logger for use inside modules and handlers.
