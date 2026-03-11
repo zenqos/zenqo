@@ -16,11 +16,15 @@ import (
 func Logger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		sw := &logStatusWriter{ResponseWriter: w, statusCode: 200}
+		sw := &logStatusWriter{ResponseWriter: w}
 		next.ServeHTTP(sw, r)
 		elapsed := time.Since(start)
+		status := sw.statusCode
+		if status == 0 {
+			status = http.StatusOK
+		}
 		zlog.Log("HTTP", fmt.Sprintf("%-6s %s  %d  %s",
-			r.Method, sanitizeLogValue(r.URL.Path), sw.statusCode, elapsed.Round(time.Microsecond)))
+			r.Method, sanitizeLogValue(r.URL.Path), status, elapsed.Round(time.Microsecond)))
 	})
 }
 
@@ -33,14 +37,29 @@ func sanitizeLogValue(s string) string {
 }
 
 // logStatusWriter captures the status code written by downstream handlers.
+// statusCode is initialised to 0; the first call to WriteHeader or Write sets it.
 type logStatusWriter struct {
 	http.ResponseWriter
-	statusCode int
+	statusCode  int
+	wroteHeader bool
 }
 
 func (sw *logStatusWriter) WriteHeader(code int) {
-	sw.statusCode = code
+	if !sw.wroteHeader {
+		sw.statusCode = code
+		sw.wroteHeader = true
+	}
 	sw.ResponseWriter.WriteHeader(code)
+}
+
+// Write captures the implicit 200 that net/http sends when a handler calls
+// Write without first calling WriteHeader.
+func (sw *logStatusWriter) Write(b []byte) (int, error) {
+	if !sw.wroteHeader {
+		sw.statusCode = http.StatusOK
+		sw.wroteHeader = true
+	}
+	return sw.ResponseWriter.Write(b)
 }
 
 func (sw *logStatusWriter) Flush() {
