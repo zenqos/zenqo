@@ -10,11 +10,19 @@ import (
 // extracted from X-Forwarded-For or X-Real-Ip headers.
 //
 // WARNING: This middleware unconditionally trusts the forwarded headers.
-// Only use it behind a trusted reverse proxy; otherwise clients can
-// spoof their IP address, bypassing rate limiting and IP-based security controls.
+// Any client can send a spoofed X-Forwarded-For header, bypassing
+// rate limiting, audit logging, and any IP-based access controls.
 //
-// For deployments where only specific proxy IPs should be trusted, use
-// RealIPWithConfig with a TrustedProxies list instead.
+// Only use RealIP when ALL of the following are true:
+//   - The application sits behind a trusted reverse proxy (nginx, AWS ALB, etc.)
+//   - The proxy strips or overwrites X-Forwarded-For before forwarding
+//
+// For production deployments, prefer RealIPWithConfig with an explicit
+// TrustedProxies allowlist so only headers from known proxy CIDRs are trusted:
+//
+//	app.Use(middleware.RealIPWithConfig(middleware.RealIPConfig{
+//	    TrustedProxies: []string{"10.0.0.0/8", "172.16.0.0/12"},
+//	}))
 func RealIP(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if ip := realIPFromHeaders(r); ip != "" {
