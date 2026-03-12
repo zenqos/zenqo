@@ -46,9 +46,9 @@ func TestFromStruct_EmbeddedFlattened(t *testing.T) {
 		UpdatedAt time.Time
 	}
 	type User struct {
-		ID   int64
-		Name string
-		Timestamps // embedded — should be inlined
+		ID         int64
+		Name       string
+		Timestamps // embedded ― should be inlined
 	}
 
 	sb := freshSB()
@@ -145,13 +145,13 @@ func TestFromStruct_MultipleEmbeddingsFlattened(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Embedded interface — must be skipped gracefully
+// Embedded interface — kmust be skipped gracefully
 // ---------------------------------------------------------------------------
 
 func TestFromStruct_EmbeddedInterfaceSkipped(t *testing.T) {
 	type WithError struct {
-		Name string
-		error // embedded interface — must not panic or crash
+		Name  string
+		error // embedded interface — kmust not panic or crash
 	}
 
 	sb := freshSB()
@@ -162,6 +162,7 @@ func TestFromStruct_EmbeddedInterfaceSkipped(t *testing.T) {
 	if !props["name"] {
 		t.Errorf("expected 'name' property, got %v", props)
 	}
+
 	// The embedded interface must NOT appear as a property.
 	for k := range props {
 		if k == "error" {
@@ -198,28 +199,24 @@ func TestFromStruct_NamedNestedStructNotFlattened(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Unexported embedded fields — must be skipped
+// Unexported regular fields — must be skipped
 // ---------------------------------------------------------------------------
 
 func TestFromStruct_UnexportedFieldsSkipped(t *testing.T) {
-	type hidden struct {
-		secret string //nolint:unused
-	}
-	type Visible struct {
-		Public string
-		hidden // unexported embedded struct — must be skipped
+	type User struct {
+		Name   string // exported — should appear
+		secret string // unexported — must not appear
 	}
 
 	sb := freshSB()
-	schema := sb.fromValue(Visible{})
+	schema := sb.fromValue(User{})
 	props := propNames(t, sb, schema)
 
-	if !props["public"] {
-		t.Errorf("expected 'public' property, got %v", props)
+	if !props["name"] {
+		t.Errorf("expected 'name' property, got %v", props)
 	}
-	// Unexported embedding and its fields must not appear.
-	if props["hidden"] {
-		t.Errorf("unexported embedded struct 'hidden' must not appear")
+	if props["secret"] {
+		t.Errorf("unexported field 'secret' must not appear in schema")
 	}
 }
 
@@ -238,6 +235,7 @@ func TestFromStruct_EmbeddedValidateTagsApplied(t *testing.T) {
 
 	sb := freshSB()
 	schema := sb.fromValue(Form{})
+	props := propNames(t, sb, schema)
 	resolved := schema
 	if schema.Ref != "" {
 		name := schema.Ref[len("#/components/schemas/"):]
