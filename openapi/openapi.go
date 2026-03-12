@@ -18,31 +18,31 @@
 package openapi
 
 import (
-		"encoding/json"
-		"fmt"
-		"html"
-		"net/http"
-		"sync"
+	"encoding/json"
+	"fmt"
+	"html"
+	"net/http"
+	"sync"
 
-		"github.com/zenqos/zenqo/core"
-		zlog "github.com/zenqos/zenqo/internal/log"
-	)
+	"github.com/zenqos/zenqo/core"
+	zlog "github.com/zenqos/zenqo/internal/log"
+)
 
 // Config holds metadata for the generated OpenAPI spec.
 type Config struct {
-		// Title is the API name shown in Swagger UI (required).
-		Title string
-		// Version is the API version string (default: "1.0.0").
-		Version string
-		// Description is an optional Markdown description shown in Swagger UI.
-		Description string
-		// SpecPath is the URL path that serves the JSON spec (default: "/openapi.json").
-		SpecPath string
-		// YAMLPath is the URL path that serves the YAML spec (default: "/openapi.yaml").
-		// Set to "-" to disable the YAML endpoint.
-		YAMLPath string
-		// DocsPath is the URL path that serves the Swagger UI (default: "/docs").
-		DocsPath string
+	// Title is the API name shown in Swagger UI (required).
+	Title string
+	// Version is the API version string (default: "1.0.0").
+	Version string
+	// Description is an optional Markdown description shown in Swagger UI.
+	Description string
+	// SpecPath is the URL path that serves the JSON spec (default: "/openapi.json").
+	SpecPath string
+	// YAMLPath is the URL path that serves the YAML spec (default: "/openapi.yaml").
+	// Set to "-" to disable the YAML endpoint.
+	YAMLPath string
+	// DocsPath is the URL path that serves the Swagger UI (default: "/docs").
+	DocsPath string
 }
 
 // Mount registers the OpenAPI JSON spec and Swagger UI endpoints on the app.
@@ -56,100 +56,100 @@ type Config struct {
 //   - GET {YAMLPath}  → application/yaml OpenAPI 3.1 spec (set YAMLPath to "-" to disable)
 //   - GET {DocsPath}  → Swagger UI HTML
 func Mount(app *core.App, cfg Config) {
-		if cfg.Version == "" {
-					cfg.Version = "1.0.0"
-				}
-		if cfg.SpecPath == "" {
-					cfg.SpecPath = "/openapi.json"
-				}
-		if cfg.YAMLPath == "" {
-					cfg.YAMLPath = "/openapi.yaml"
-				}
-		if cfg.DocsPath == "" {
-					cfg.DocsPath = "/docs"
-				}
+	if cfg.Version == "" {
+		cfg.Version = "1.0.0"
+	}
+	if cfg.SpecPath == "" {
+		cfg.SpecPath = "/openapi.json"
+	}
+	if cfg.YAMLPath == "" {
+		cfg.YAMLPath = "/openapi.yaml"
+	}
+	if cfg.DocsPath == "" {
+		cfg.DocsPath = "/docs"
+	}
 
-		specPath := cfg.SpecPath
-		yamlPath := cfg.YAMLPath
-		docsPath := cfg.DocsPath
+	specPath := cfg.SpecPath
+	yamlPath := cfg.YAMLPath
+	docsPath := cfg.DocsPath
 
-		// The Swagger UI must fetch the spec using the full URL path (including any
-		// global prefix set via app.SetGlobalPrefix), so the browser request resolves
-		// correctly regardless of which path the docs page is served from.
-		fullSpecURL := app.Prefix() + specPath
+	// The Swagger UI must fetch the spec using the full URL path (including any
+	// global prefix set via app.SetGlobalPrefix), so the browser request resolves
+	// correctly regardless of which path the docs page is served from.
+	fullSpecURL := app.Prefix() + specPath
 
-		// Pre-escape template values to prevent XSS via crafted Config.Title or SpecPath.
-		// - Title is placed inside an HTML <title> tag → HTML-escape.
-		// - fullSpecURL is placed inside a JS string literal → JSON-encode (includes quotes).
-		escapedTitle := html.EscapeString(cfg.Title)
-		urlJSON, _ := json.Marshal(fullSpecURL) // e.g. `"/api/openapi.json"`
+	// Pre-escape template values to prevent XSS via crafted Config.Title or SpecPath.
+	// - Title is placed inside an HTML <title> tag → HTML-escape.
+	// - fullSpecURL is placed inside a JS string literal → JSON-encode (includes quotes).
+	escapedTitle := html.EscapeString(cfg.Title)
+	urlJSON, _ := json.Marshal(fullSpecURL) // e.g. `"/api/openapi.json"`
 
-		// Spec generation is deferred to the first request so that all controllers
-		// registered after Mount() are included in the spec.
-		var (
-					once     sync.Once
-					specJSON []byte
-					specYAML []byte
-					buildErr error
-				)
+	// Spec generation is deferred to the first request so that all controllers
+	// registered after Mount() are included in the spec.
+	var (
+		once     sync.Once
+		specJSON []byte
+		specYAML []byte
+		buildErr error
+	)
 
-		generateSpec := func() {
-					routes := app.CollectRoutes()
-					sb := &schemaBuilder{
-									schemas:  make(map[string]*Schema),
-									building: make(map[string]bool),
-								}
-					spec := buildSpec(sb, cfg, routes)
-					if len(sb.schemas) > 0 {
-									spec.Components = &Components{Schemas: sb.schemas}
-								}
-					specJSON, buildErr = json.MarshalIndent(spec, "", "  ")
-					if buildErr != nil {
-									zlog.Err("OpenAPI", fmt.Sprintf("failed to marshal spec: %v", buildErr))
-									return
-								}
-					// Convert the JSON spec to YAML so both formats share one generation pass.
-					var yamlErr error
-					specYAML, yamlErr = jsonToYAML(specJSON)
-					if yamlErr != nil {
-									// YAML conversion failure is non-fatal; log and leave specYAML nil.
-									zlog.Err("OpenAPI", fmt.Sprintf("failed to convert spec to YAML: %v", yamlErr))
-								}
-				}
+	generateSpec := func() {
+		routes := app.CollectRoutes()
+		sb := &schemaBuilder{
+			schemas:  make(map[string]*Schema),
+			building: make(map[string]bool),
+		}
+		spec := buildSpec(sb, cfg, routes)
+		if len(sb.schemas) > 0 {
+			spec.Components = &Components{Schemas: sb.schemas}
+		}
+		specJSON, buildErr = json.MarshalIndent(spec, "", "  ")
+		if buildErr != nil {
+			zlog.Err("OpenAPI", fmt.Sprintf("failed to marshal spec: %v", buildErr))
+			return
+		}
+		// Convert the JSON spec to YAML so both formats share one generation pass.
+		var yamlErr error
+		specYAML, yamlErr = jsonToYAML(specJSON)
+		if yamlErr != nil {
+			// YAML conversion failure is non-fatal; log and leave specYAML nil.
+			zlog.Err("OpenAPI", fmt.Sprintf("failed to convert spec to YAML: %v", yamlErr))
+		}
+	}
 
-		ctrl := &openAPICtrl{}
-		ctrl.SetBasePath("/")
-		ctrl.Handle("GET", specPath, func(w http.ResponseWriter, r *http.Request) {
-					once.Do(generateSpec)
-					if buildErr != nil {
-									http.Error(w, `{"code":500,"message":"failed to generate OpenAPI spec"}`, http.StatusInternalServerError)
-									return
-								}
-					w.Header().Set("Content-Type", "application/json")
-					w.Header().Set("Access-Control-Allow-Origin", "*")
-					w.WriteHeader(http.StatusOK)
-					w.Write(specJSON) //nolint:errcheck
-				})
-		if yamlPath != "-" {
-					ctrl.Handle("GET", yamlPath, func(w http.ResponseWriter, r *http.Request) {
-									once.Do(generateSpec)
-									if buildErr != nil {
-														http.Error(w, `{"code":500,"message":"failed to generate OpenAPI spec"}`, http.StatusInternalServerError)
-														return
-													}
-									if specYAML == nil {
-														http.Error(w, `{"code":500,"message":"failed to convert spec to YAML"}`, http.StatusInternalServerError)
-														return
-													}
-									w.Header().Set("Content-Type", "application/yaml")
-									w.Header().Set("Access-Control-Allow-Origin", "*")
-									w.WriteHeader(http.StatusOK)
-									w.Write(specYAML) //nolint:errcheck
-								})
-				}
-		ctrl.Handle("GET", docsPath, func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "text/html; charset=utf-8")
-					fmt.Fprintf(w, swaggerUIHTML, escapedTitle, string(urlJSON)) //nolint:errcheck
-				})
-		app.UseController(ctrl)
+	ctrl := &openAPICtrl{}
+	ctrl.SetBasePath("/")
+	ctrl.Handle("GET", specPath, func(w http.ResponseWriter, r *http.Request) {
+		once.Do(generateSpec)
+		if buildErr != nil {
+			http.Error(w, `{"code":500,"message":"failed to generate OpenAPI spec"}`, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
+		w.Write(specJSON) //nolint:errcheck
+	})
+	if yamlPath != "-" {
+		ctrl.Handle("GET", yamlPath, func(w http.ResponseWriter, r *http.Request) {
+			once.Do(generateSpec)
+			if buildErr != nil {
+				http.Error(w, `{"code":500,"message":"failed to generate OpenAPI spec"}`, http.StatusInternalServerError)
+				return
+			}
+			if specYAML == nil {
+				http.Error(w, `{"code":500,"message":"failed to convert spec to YAML"}`, http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/yaml")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.WriteHeader(http.StatusOK)
+			w.Write(specYAML) //nolint:errcheck
+		})
+	}
+	ctrl.Handle("GET", docsPath, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(w, swaggerUIHTML, escapedTitle, string(urlJSON)) //nolint:errcheck
+	})
+	app.UseController(ctrl)
 }
