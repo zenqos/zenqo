@@ -205,7 +205,7 @@ func TestFromStruct_NamedNestedStructNotFlattened(t *testing.T) {
 func TestFromStruct_UnexportedFieldsSkipped(t *testing.T) {
 	type User struct {
 		Name   string // exported — should appear
-		secret string // unexported — must not appear
+		secret string //nolint:unused // unexported — must not appear
 	}
 
 	sb := freshSB()
