@@ -14,7 +14,6 @@ import (
 // Helpers
 // ---------------------------------------------------------------------------
 
-
 // specFromApp mounts openapi on app with the given config, fires a GET to
 // SpecPath, and returns the decoded spec map.
 func specFromApp(t *testing.T, app *core.App, cfg Config) map[string]any {
