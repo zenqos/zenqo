@@ -235,7 +235,6 @@ func TestFromStruct_EmbeddedValidateTagsApplied(t *testing.T) {
 
 	sb := freshSB()
 	schema := sb.fromValue(Form{})
-	props := propNames(t, sb, schema)
 	resolved := schema
 	if schema.Ref != "" {
 		name := schema.Ref[len("#/components/schemas/"):]
