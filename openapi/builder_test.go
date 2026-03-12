@@ -14,13 +14,6 @@ import (
 // Helpers
 // ---------------------------------------------------------------------------
 
-// newSchemaBuilder returns a fresh schemaBuilder for test use.
-func newSchemaBuilder() *schemaBuilder {
-	return &schemaBuilder{
-		schemas:  make(map[string]*Schema),
-		building: make(map[string]bool),
-	}
-}
 
 // specFromApp mounts openapi on app with the given config, fires a GET to
 // SpecPath, and returns the decoded spec map.
