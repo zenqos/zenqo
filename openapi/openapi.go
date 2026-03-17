@@ -13,6 +13,7 @@
 //
 //	app.Start(":3000")
 //	// → GET /openapi.json  — machine-readable spec
+//	// → GET /openapi.yaml  — YAML spec
 //	// → GET /docs          — Swagger UI
 package openapi
 
@@ -37,6 +38,9 @@ type Config struct {
 	Description string
 	// SpecPath is the URL path that serves the JSON spec (default: "/openapi.json").
 	SpecPath string
+	// YAMLPath is the URL path that serves the YAML spec (default: "/openapi.yaml").
+	// Set to "-" to disable the YAML endpoint.
+	YAMLPath string
 	// DocsPath is the URL path that serves the Swagger UI (default: "/docs").
 	DocsPath string
 	// AutoErrorResponses controls whether standard error responses are
@@ -67,6 +71,7 @@ type Config struct {
 //
 // Endpoints registered:
 //   - GET {SpecPath}  → application/json OpenAPI 3.1 spec
+//   - GET {YAMLPath}  → application/yaml OpenAPI 3.1 spec (set YAMLPath to "-" to disable)
 //   - GET {DocsPath}  → Swagger UI HTML
 func Mount(app *core.App, cfg Config) {
 	if cfg.Version == "" {
@@ -75,11 +80,15 @@ func Mount(app *core.App, cfg Config) {
 	if cfg.SpecPath == "" {
 		cfg.SpecPath = "/openapi.json"
 	}
+	if cfg.YAMLPath == "" {
+		cfg.YAMLPath = "/openapi.yaml"
+	}
 	if cfg.DocsPath == "" {
 		cfg.DocsPath = "/docs"
 	}
 
 	specPath := cfg.SpecPath
+	yamlPath := cfg.YAMLPath
 	docsPath := cfg.DocsPath
 
 	// The Swagger UI must fetch the spec using the full URL path (including any
@@ -98,6 +107,7 @@ func Mount(app *core.App, cfg Config) {
 	var (
 		once     sync.Once
 		specJSON []byte
+		specYAML []byte
 		buildErr error
 	)
 
@@ -114,6 +124,14 @@ func Mount(app *core.App, cfg Config) {
 		specJSON, buildErr = json.MarshalIndent(spec, "", "  ")
 		if buildErr != nil {
 			zlog.Err("OpenAPI", fmt.Sprintf("failed to marshal spec: %v", buildErr))
+			return
+		}
+		// Convert the JSON spec to YAML so both formats share one generation pass.
+		var yamlErr error
+		specYAML, yamlErr = jsonToYAML(specJSON)
+		if yamlErr != nil {
+			// YAML conversion failure is non-fatal; log and leave specYAML nil.
+			zlog.Err("OpenAPI", fmt.Sprintf("failed to convert spec to YAML: %v", yamlErr))
 		}
 	}
 
@@ -130,6 +148,23 @@ func Mount(app *core.App, cfg Config) {
 		w.WriteHeader(http.StatusOK)
 		w.Write(specJSON) //nolint:errcheck
 	})
+	if yamlPath != "-" {
+		ctrl.Handle("GET", yamlPath, func(w http.ResponseWriter, r *http.Request) {
+			once.Do(generateSpec)
+			if buildErr != nil {
+				http.Error(w, `{"code":500,"message":"failed to generate OpenAPI spec"}`, http.StatusInternalServerError)
+				return
+			}
+			if specYAML == nil {
+				http.Error(w, `{"code":500,"message":"failed to convert spec to YAML"}`, http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/yaml")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.WriteHeader(http.StatusOK)
+			w.Write(specYAML) //nolint:errcheck
+		})
+	}
 	ctrl.Handle("GET", docsPath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprintf(w, swaggerUIHTML, escapedTitle, string(urlJSON)) //nolint:errcheck
