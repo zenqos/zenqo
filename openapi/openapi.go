@@ -39,6 +39,24 @@ type Config struct {
 	SpecPath string
 	// DocsPath is the URL path that serves the Swagger UI (default: "/docs").
 	DocsPath string
+	// AutoErrorResponses controls whether standard error responses are
+	// automatically added to every route in the generated spec (default: true).
+	//
+	// When enabled the following responses are injected per route:
+	//   - 500 Internal Server Error — always added
+	//   - 400 Bad Request          — routes with a request body (Body())
+	//   - 404 Not Found            — routes with path parameters
+	//   - 422 Unprocessable Entity — routes with a request body (validation errors)
+	//
+	// The response schema matches the error format active for the app:
+	//   - ProblemDetail when UseRFC9457 middleware is in use
+	//   - ErrorResponse otherwise
+	//
+	// Set to false to opt out and document error responses manually.
+	AutoErrorResponses *bool
+	// UseRFC9457 controls the error schema used for auto-injected error
+	// responses. When true, ProblemDetail is used instead of ErrorResponse.
+	UseRFC9457 bool
 }
 
 // Mount registers the OpenAPI JSON spec and Swagger UI endpoints on the app.

@@ -9,7 +9,14 @@ import (
 	"github.com/zenqos/zenqo/core"
 )
 
-// pathParamRe matches chi-style path parameters: {id}, {id:\\d+}, {name:[a-z]+}
+// autoErrorResponsesEnabled reports whether automatic error-response injection
+// is active for cfg. The field is a pointer so that nil means "use default",
+// which is enabled. Only an explicit false pointer disables it.
+func autoErrorResponsesEnabled(cfg Config) bool {
+	return cfg.AutoErrorResponses == nil || *cfg.AutoErrorResponses
+}
+
+// pathParamRe matches chi-style path parameters: {id}, {id:\d+}, {name:[a-z]+}
 // Capture group 1 is the parameter name only (strips the regex constraint).
 var pathParamRe = regexp.MustCompile(`\{([^}:]+)[^}]*\}`)
 
@@ -31,7 +38,7 @@ func buildSpec(sb *schemaBuilder, cfg Config, routes []core.RouteEntry) *Spec {
 			item = &PathItem{}
 			spec.Paths[oaPath] = item
 		}
-		op := buildOperation(sb, re, oaPath)
+		op := buildOperation(sb, cfg, re, oaPath)
 		switch re.Method {
 		case "GET":
 			item.Get = op
@@ -49,7 +56,7 @@ func buildSpec(sb *schemaBuilder, cfg Config, routes []core.RouteEntry) *Spec {
 }
 
 // toOpenAPIPath converts a chi-style path to an OpenAPI path.
-// e.g. /users/{id:\\d+} → /users/{id}
+// e.g. /users/{id:\d+} → /users/{id}
 func toOpenAPIPath(chiPath string) string {
 	result := pathParamRe.ReplaceAllString(chiPath, "{$1}")
 	if result != "/" && strings.HasSuffix(result, "/") {
@@ -58,7 +65,7 @@ func toOpenAPIPath(chiPath string) string {
 	return result
 }
 
-func buildOperation(sb *schemaBuilder, re core.RouteEntry, oaPath string) *Operation {
+func buildOperation(sb *schemaBuilder, cfg Config, re core.RouteEntry, oaPath string) *Operation {
 	meta := re.Definition.Meta
 	op := &Operation{
 		Summary:     meta.Summary,
@@ -109,7 +116,67 @@ func buildOperation(sb *schemaBuilder, re core.RouteEntry, oaPath string) *Opera
 		op.Responses[strconv.Itoa(status)] = &Response{Description: statusText(status)}
 	}
 
+	// Automatically inject standard error responses unless opted out.
+	if autoErrorResponsesEnabled(cfg) {
+		injectAutoErrorResponses(sb, cfg, op, meta)
+	}
+
 	return op
+}
+
+// injectAutoErrorResponses adds standard HTTP error responses to op based on
+// the route's metadata. Existing explicit responses are never overwritten.
+//
+//   - 500 Internal Server Error — always (framework panic recovery or handler errors)
+//   - 400 Bad Request          — routes with a request body (JSON decode failure)
+//   - 422 Unprocessable Entity — routes with a request body (validation failure)
+//   - 404 Not Found            — routes with path parameters
+func injectAutoErrorResponses(sb *schemaBuilder, cfg Config, op *Operation, meta core.RouteDocMeta) {
+	errSchema := autoErrorSchema(sb, cfg)
+
+	// addIfMissing inserts code → description unless already documented.
+	addIfMissing := func(code int) {
+		key := strconv.Itoa(code)
+		if _, exists := op.Responses[key]; exists {
+			return
+		}
+		op.Responses[key] = &Response{
+			Description: statusText(code),
+			Content: map[string]*MediaType{
+				"application/json": {Schema: errSchema},
+			},
+		}
+	}
+
+	// 500 is always possible (panic recovery, unhandled handler errors).
+	addIfMissing(500)
+
+	// Body-bearing routes can produce 400 (bad JSON) and 422 (validation).
+	if meta.RequestBody != nil {
+		addIfMissing(400)
+		addIfMissing(422)
+	}
+
+	// Routes with path parameters can produce 404 (resource not found).
+	if len(op.Parameters) > 0 {
+		for _, p := range op.Parameters {
+			if p.In == "path" {
+				addIfMissing(404)
+				break
+			}
+		}
+	}
+}
+
+// autoErrorSchema returns the appropriate error schema for auto-injected
+// responses. ProblemDetail is used when cfg.UseRFC9457 is true; otherwise
+// ErrorResponse is used. Both schemas are registered in the shared component
+// registry so they appear under #/components/schemas.
+func autoErrorSchema(sb *schemaBuilder, cfg Config) *Schema {
+	if cfg.UseRFC9457 {
+		return sb.fromValue(core.ProblemDetail{})
+	}
+	return sb.fromValue(core.ErrorResponse{})
 }
 
 func buildOperationID(method, oaPath string) string {
