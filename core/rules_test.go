@@ -1,6 +1,9 @@
 package core
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestCheckURL(t *testing.T) {
 	type dto struct {
@@ -171,6 +174,29 @@ func TestCheckUppercase(t *testing.T) {
 		t.Fatalf("uppercase should pass, got %v", err)
 	}
 	assertValidationField(t, validate(dto{Name: "Hello"}), "name", "name must be uppercase")
+}
+
+// === Unknown rule panic test (#88) ===
+
+func TestCheckUnknownRulePanics(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic for unknown rule, got none")
+		}
+		msg, ok := r.(string)
+		if !ok {
+			t.Fatalf("expected string panic, got %T: %v", r, r)
+		}
+		if !strings.Contains(msg, "requird") {
+			t.Fatalf("panic message should mention the bad rule, got: %s", msg)
+		}
+	}()
+
+	type dto struct {
+		Email string `validate:"requird"`
+	}
+	_ = validate(dto{Email: "test@example.com"})
 }
 
 // === New edge case tests ===

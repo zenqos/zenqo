@@ -52,8 +52,11 @@ func checkRule(rule string, fv reflect.Value, field string) string {
 		return checkLowercase(fv, field)
 	case rule == "uppercase":
 		return checkUppercase(fv, field)
+	case rule == "dive":
+		return "" // handled by validate loop, not checkRule
+	default:
+		panic(fmt.Sprintf("zenqo: unknown validation rule %q on field %q", rule, field))
 	}
-	return ""
 }
 
 func checkRequired(fv reflect.Value, field string) string {
