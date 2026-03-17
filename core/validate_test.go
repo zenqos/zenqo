@@ -96,8 +96,8 @@ func TestValidateNestedStruct(t *testing.T) {
 		Address Address
 	}
 	err := validate(dto{Name: "Alice"})
-	// City is required but empty → should fail
-	assertValidationField(t, err, "city", "city is required")
+	// City is required but empty → should fail with qualified path
+	assertValidationField(t, err, "address.city", "address.city is required")
 }
 
 func TestValidateNestedStructWithTag(t *testing.T) {
@@ -108,14 +108,123 @@ func TestValidateNestedStructWithTag(t *testing.T) {
 		Address Address `validate:"required"`
 	}
 	err := validate(dto{})
-	// Both "city is required" (from recursion) and "address is required" (from tag)
 	var ve *ValidationError
 	if !errors.As(err, &ve) {
 		t.Fatalf("expected ValidationError, got %v", err)
 	}
+	// Should have both "address.city is required" (from recursion) and "address is required" (from tag)
 	if len(ve.Errors) < 1 {
 		t.Fatalf("expected at least 1 error, got %d", len(ve.Errors))
 	}
+}
+
+// TestValidateNestedAmbiguousFields verifies that same-named fields in
+// different nested structs are disambiguated by their path prefix (#86).
+func TestValidateNestedAmbiguousFields(t *testing.T) {
+	type ShippingAddress struct {
+		City string `validate:"required"`
+	}
+	type BillingAddress struct {
+		City string `validate:"required"`
+	}
+	type dto struct {
+		Shipping ShippingAddress
+		Billing  BillingAddress
+	}
+	err := validate(dto{})
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected ValidationError, got %v", err)
+	}
+	assertValidationField(t, err, "shipping.city", "shipping.city is required")
+	assertValidationField(t, err, "billing.city", "billing.city is required")
+}
+
+// TestValidateDeepNested verifies 3-level deep nesting produces correct paths.
+func TestValidateDeepNested(t *testing.T) {
+	type Street struct {
+		Name string `validate:"required"`
+	}
+	type Address struct {
+		Street Street
+	}
+	type dto struct {
+		Home Address
+	}
+	err := validate(dto{})
+	assertValidationField(t, err, "home.address.street.name", "home.address.street.name is required")
+}
+
+// TestValidateCycleDetection verifies self-referential structs don't stack overflow (#89).
+func TestValidateCycleDetection(t *testing.T) {
+	type Node struct {
+		Value  string `validate:"required"`
+		Parent *Node
+	}
+	a := &Node{Value: "a"}
+	b := &Node{Value: "b", Parent: a}
+	a.Parent = b // cycle: a → b → a
+
+	// Should not panic or infinite loop
+	err := validate(a)
+	if err != nil {
+		t.Fatalf("valid cyclic struct should pass, got %v", err)
+	}
+}
+
+// TestValidateCycleDetectionWithError verifies errors are still reported in cyclic structs.
+func TestValidateCycleDetectionWithError(t *testing.T) {
+	type Node struct {
+		Value  string `validate:"required"`
+		Parent *Node
+	}
+	a := &Node{Value: ""}
+	b := &Node{Value: "ok", Parent: a}
+	a.Parent = b // cycle: a → b → a
+
+	err := validate(a)
+	assertValidationField(t, err, "value", "value is required")
+}
+
+// TestValidateDive verifies slice element validation with dive rule (#87).
+func TestValidateDive(t *testing.T) {
+	type Address struct {
+		City string `validate:"required"`
+	}
+	type dto struct {
+		Addresses []Address `validate:"min=1,dive"`
+	}
+	err := validate(dto{Addresses: []Address{{City: "Seoul"}, {}}})
+	assertValidationField(t, err, "addresses[1].city", "addresses[1].city is required")
+
+	// All valid
+	if err := validate(dto{Addresses: []Address{{City: "Seoul"}, {City: "Busan"}}}); err != nil {
+		t.Fatalf("all valid elements should pass, got %v", err)
+	}
+}
+
+// TestValidateDiveEmpty verifies dive on empty slice still respects min.
+func TestValidateDiveEmpty(t *testing.T) {
+	type Item struct {
+		Name string `validate:"required"`
+	}
+	type dto struct {
+		Items []Item `validate:"min=1,dive"`
+	}
+	err := validate(dto{Items: []Item{}})
+	assertValidationField(t, err, "items", "items must have at least 1 items")
+}
+
+// TestValidateDivePointerElements verifies dive works with pointer slice elements.
+func TestValidateDivePointerElements(t *testing.T) {
+	type Item struct {
+		Name string `validate:"required"`
+	}
+	type dto struct {
+		Items []*Item `validate:"dive"`
+	}
+	err := validate(dto{Items: []*Item{{Name: "ok"}, {Name: ""}, nil}})
+	assertValidationField(t, err, "items[1].name", "items[1].name is required")
 }
 
 func TestValidateMultipleErrors(t *testing.T) {
