@@ -74,6 +74,10 @@ func (sb *schemaBuilder) fromType(t reflect.Type) *Schema {
 
 // fromStruct converts a struct type to an OpenAPI Schema.
 // Named structs are added to components/schemas and referenced via $ref.
+//
+// Anonymous (embedded) struct fields are inlined into the parent schema,
+// mirroring Go's embedding semantics. Both value and pointer embeddings are
+// handled; embedded interface fields are skipped gracefully.
 func (sb *schemaBuilder) fromStruct(t reflect.Type) *Schema {
 	name := t.Name()
 
@@ -93,20 +97,7 @@ func (sb *schemaBuilder) fromStruct(t reflect.Type) *Schema {
 		Properties: make(map[string]*Schema),
 	}
 
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		if !f.IsExported() {
-			continue
-		}
-		fieldName, _ := enc.ResolveFieldTag(f)
-		if fieldName == "-" {
-			continue
-		}
-
-		fieldSchema := sb.fromType(f.Type)
-		applyValidateTags(f, f.Type, fieldSchema, &schema.Required, fieldName)
-		schema.Properties[fieldName] = fieldSchema
-	}
+	sb.collectStructFields(t, schema)
 
 	if len(schema.Properties) == 0 {
 		schema.Properties = nil
@@ -117,6 +108,45 @@ func (sb *schemaBuilder) fromStruct(t reflect.Type) *Schema {
 		return &Schema{Ref: "#/components/schemas/" + name}
 	}
 	return schema
+}
+
+// collectStructFields iterates over the fields of t, inlining any anonymous
+// (embedded) struct fields directly into schema rather than nesting them.
+// This matches Go's embedding semantics and produces flatter, more accurate
+// OpenAPI schemas for common patterns such as gorm.Model or timestamp mixins.
+func (sb *schemaBuilder) collectStructFields(t reflect.Type, schema *Schema) {
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+
+		if f.Anonymous {
+			// Dereference pointer embeddings: *Timestamps → Timestamps
+			ft := f.Type
+			for ft.Kind() == reflect.Ptr {
+				ft = ft.Elem()
+			}
+			// Skip embedded interface fields (e.g. embedded error or io.Reader).
+			if ft.Kind() == reflect.Interface {
+				continue
+			}
+			// Recurse into the embedded struct, inlining its fields.
+			if ft.Kind() == reflect.Struct {
+				sb.collectStructFields(ft, schema)
+			}
+			continue
+		}
+
+		fieldName, _ := enc.ResolveFieldTag(f)
+		if fieldName == "-" {
+			continue
+		}
+
+		fieldSchema := sb.fromType(f.Type)
+		applyValidateTags(f, f.Type, fieldSchema, &schema.Required, fieldName)
+		schema.Properties[fieldName] = fieldSchema
+	}
 }
 
 // applyValidateTags reads validate:"..." struct tags and sets OpenAPI constraints
