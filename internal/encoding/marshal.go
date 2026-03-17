@@ -2,11 +2,15 @@ package encoding
 
 import (
 	"bytes"
+	"encoding"
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"sort"
 )
 
 var jsonMarshalerType = reflect.TypeOf((*json.Marshaler)(nil)).Elem()
+var textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 
 // Marshal encodes v to JSON with automatic PascalCase → camelCase conversion.
 // Struct tags are completely optional.
@@ -46,10 +50,30 @@ func encodeValue(v reflect.Value) ([]byte, error) {
 	if v.CanAddr() && v.Addr().Type().Implements(jsonMarshalerType) {
 		return v.Addr().Interface().(json.Marshaler).MarshalJSON()
 	}
+	// encoding.TextMarshaler fallback (e.g. net/netip.Addr, net.IP)
+	if v.Type().Implements(textMarshalerType) {
+		text, err := v.Interface().(encoding.TextMarshaler).MarshalText()
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(string(text))
+	}
+	if v.CanAddr() && v.Addr().Type().Implements(textMarshalerType) {
+		text, err := v.Addr().Interface().(encoding.TextMarshaler).MarshalText()
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(string(text))
+	}
 
 	switch v.Kind() {
 	case reflect.Struct:
 		return encodeStruct(v)
+	case reflect.Map:
+		if v.IsNil() {
+			return []byte("null"), nil
+		}
+		return encodeMap(v)
 	case reflect.Slice:
 		if v.IsNil() {
 			return []byte("[]"), nil
@@ -112,6 +136,7 @@ func encodeStruct(v reflect.Value) ([]byte, error) {
 
 // inlineEmbedded writes the exported fields of an embedded struct
 // directly into the parent object (no nesting).
+// Recursively inlines nested anonymous (embedded) fields.
 func inlineEmbedded(v reflect.Value, first *bool, buf *bytes.Buffer) error {
 	if v.Kind() == reflect.Ptr {
 		if v.IsNil() {
@@ -128,6 +153,15 @@ func inlineEmbedded(v reflect.Value, first *bool, buf *bytes.Buffer) error {
 			continue
 		}
 		fv := v.Field(f.index)
+
+		// Recursively inline nested embedded structs
+		if f.anonymous {
+			if err := inlineEmbedded(fv, first, buf); err != nil {
+				return err
+			}
+			continue
+		}
+
 		if f.key == "-" {
 			continue
 		}
@@ -147,6 +181,44 @@ func inlineEmbedded(v reflect.Value, first *bool, buf *bytes.Buffer) error {
 		*first = false
 	}
 	return nil
+}
+
+// encodeMap encodes a map with sorted keys, applying camelCase conversion
+// to struct values within the map (unlike json.Marshal fallback).
+func encodeMap(v reflect.Value) ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+
+	// Sort keys for deterministic output
+	keys := v.MapKeys()
+	sortedKeys := make([]reflect.Value, len(keys))
+	copy(sortedKeys, keys)
+	sort.Slice(sortedKeys, func(i, j int) bool {
+		return fmt.Sprint(sortedKeys[i].Interface()) < fmt.Sprint(sortedKeys[j].Interface())
+	})
+
+	for i, key := range sortedKeys {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		// Encode key
+		keyBytes, err := json.Marshal(key.Interface())
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(keyBytes)
+		buf.WriteByte(':')
+
+		// Encode value through our pipeline (preserves camelCase for structs)
+		val, err := encodeValue(v.MapIndex(key))
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(val)
+	}
+
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
 }
 
 func encodeSlice(v reflect.Value) ([]byte, error) {
