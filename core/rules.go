@@ -7,11 +7,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var (
 	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 	uuidRegex  = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	regexCache sync.Map // pattern string → *regexp.Regexp
 )
 
 func checkRule(rule string, fv reflect.Value, field string) string {
@@ -62,52 +64,92 @@ func checkRequired(fv reflect.Value, field string) string {
 }
 
 func checkMin(param string, fv reflect.Value, field string) string {
-	n, err := strconv.Atoi(param)
-	if err != nil {
-		return ""
-	}
 	switch fv.Kind() {
 	case reflect.String:
+		n, err := strconv.Atoi(param)
+		if err != nil {
+			return ""
+		}
 		if fv.Len() < n {
 			return fmt.Sprintf("%s must be at least %d characters", field, n)
 		}
+	case reflect.Slice, reflect.Array, reflect.Map:
+		n, err := strconv.Atoi(param)
+		if err != nil {
+			return ""
+		}
+		if fv.Len() < n {
+			return fmt.Sprintf("%s must have at least %d items", field, n)
+		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		n, err := strconv.ParseFloat(param, 64)
+		if err != nil {
+			return ""
+		}
 		if fv.Int() < int64(n) {
-			return fmt.Sprintf("%s must be at least %d", field, n)
+			return fmt.Sprintf("%s must be at least %s", field, param)
 		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		n, err := strconv.ParseFloat(param, 64)
+		if err != nil {
+			return ""
+		}
 		if fv.Uint() < uint64(n) {
-			return fmt.Sprintf("%s must be at least %d", field, n)
+			return fmt.Sprintf("%s must be at least %s", field, param)
 		}
 	case reflect.Float32, reflect.Float64:
-		if fv.Float() < float64(n) {
-			return fmt.Sprintf("%s must be at least %d", field, n)
+		n, err := strconv.ParseFloat(param, 64)
+		if err != nil {
+			return ""
+		}
+		if fv.Float() < n {
+			return fmt.Sprintf("%s must be at least %s", field, param)
 		}
 	}
 	return ""
 }
 
 func checkMax(param string, fv reflect.Value, field string) string {
-	n, err := strconv.Atoi(param)
-	if err != nil {
-		return ""
-	}
 	switch fv.Kind() {
 	case reflect.String:
+		n, err := strconv.Atoi(param)
+		if err != nil {
+			return ""
+		}
 		if fv.Len() > n {
 			return fmt.Sprintf("%s must be at most %d characters", field, n)
 		}
+	case reflect.Slice, reflect.Array, reflect.Map:
+		n, err := strconv.Atoi(param)
+		if err != nil {
+			return ""
+		}
+		if fv.Len() > n {
+			return fmt.Sprintf("%s must have at most %d items", field, n)
+		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		n, err := strconv.ParseFloat(param, 64)
+		if err != nil {
+			return ""
+		}
 		if fv.Int() > int64(n) {
-			return fmt.Sprintf("%s must be at most %d", field, n)
+			return fmt.Sprintf("%s must be at most %s", field, param)
 		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		n, err := strconv.ParseFloat(param, 64)
+		if err != nil {
+			return ""
+		}
 		if fv.Uint() > uint64(n) {
-			return fmt.Sprintf("%s must be at most %d", field, n)
+			return fmt.Sprintf("%s must be at most %s", field, param)
 		}
 	case reflect.Float32, reflect.Float64:
-		if fv.Float() > float64(n) {
-			return fmt.Sprintf("%s must be at most %d", field, n)
+		n, err := strconv.ParseFloat(param, 64)
+		if err != nil {
+			return ""
+		}
+		if fv.Float() > n {
+			return fmt.Sprintf("%s must be at most %s", field, param)
 		}
 	}
 	return ""
@@ -257,7 +299,7 @@ func checkRegex(pattern string, fv reflect.Value, field string) string {
 	if s == "" {
 		return ""
 	}
-	re, err := regexp.Compile(pattern)
+	re, err := getOrCompileRegex(pattern)
 	if err != nil {
 		return fmt.Sprintf("%s has invalid regex pattern", field)
 	}
@@ -265,6 +307,18 @@ func checkRegex(pattern string, fv reflect.Value, field string) string {
 		return fmt.Sprintf("%s must match pattern %s", field, pattern)
 	}
 	return ""
+}
+
+func getOrCompileRegex(pattern string) (*regexp.Regexp, error) {
+	if cached, ok := regexCache.Load(pattern); ok {
+		return cached.(*regexp.Regexp), nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+	regexCache.Store(pattern, re)
+	return re, nil
 }
 
 func checkContains(substr string, fv reflect.Value, field string) string {

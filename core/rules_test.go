@@ -172,3 +172,45 @@ func TestCheckUppercase(t *testing.T) {
 	}
 	assertValidationField(t, validate(dto{Name: "Hello"}), "name", "name must be uppercase")
 }
+
+// === New edge case tests ===
+
+func TestCheckMinSlice(t *testing.T) {
+	type dto struct {
+		Tags []string `validate:"min=2"`
+	}
+	assertValidationField(t, validate(dto{Tags: []string{"go"}}), "tags", "tags must have at least 2 items")
+	if err := validate(dto{Tags: []string{"go", "web"}}); err != nil {
+		t.Fatalf("slice with 2 items should pass min=2, got %v", err)
+	}
+}
+
+func TestCheckMaxSlice(t *testing.T) {
+	type dto struct {
+		Tags []string `validate:"max=2"`
+	}
+	assertValidationField(t, validate(dto{Tags: []string{"a", "b", "c"}}), "tags", "tags must have at most 2 items")
+	if err := validate(dto{Tags: []string{"a", "b"}}); err != nil {
+		t.Fatalf("slice with 2 items should pass max=2, got %v", err)
+	}
+}
+
+func TestCheckMinFloat(t *testing.T) {
+	type dto struct {
+		Score float64 `validate:"min=0"`
+	}
+	assertValidationField(t, validate(dto{Score: -1.5}), "score", "score must be at least 0")
+	if err := validate(dto{Score: 0}); err != nil {
+		t.Fatalf("score=0 should pass min=0, got %v", err)
+	}
+}
+
+func TestCheckMaxFloat(t *testing.T) {
+	type dto struct {
+		Score float64 `validate:"max=100"`
+	}
+	assertValidationField(t, validate(dto{Score: 101}), "score", "score must be at most 100")
+	if err := validate(dto{Score: 100}); err != nil {
+		t.Fatalf("score=100 should pass max=100, got %v", err)
+	}
+}
