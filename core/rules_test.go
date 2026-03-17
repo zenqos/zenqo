@@ -196,7 +196,7 @@ func TestCheckUnknownRulePanics(t *testing.T) {
 	type dto struct {
 		Email string `validate:"requird"`
 	}
-	validate(dto{Email: "test@example.com"})
+	_ = validate(dto{Email: "test@example.com"})
 }
 
 // === New edge case tests ===

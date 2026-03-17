@@ -152,7 +152,7 @@ func TestValidateDeepNested(t *testing.T) {
 		Home Address
 	}
 	err := validate(dto{})
-	assertValidationField(t, err, "home.address.street.name", "home.address.street.name is required")
+	assertValidationField(t, err, "home.street.name", "home.street.name is required")
 }
 
 // TestValidateCycleDetection verifies self-referential structs don't stack overflow (#89).
