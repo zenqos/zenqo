@@ -55,10 +55,12 @@ func emitYAML(buf *strings.Builder, v any, depth int) {
 		for _, item := range val {
 			buf.WriteString(pad)
 			buf.WriteString("- ")
-			switch item.(type) {
-			case map[string]any, []any:
+			switch child := item.(type) {
+			case map[string]any:
+				emitYAMLMapInline(buf, child, depth+1)
+			case []any:
 				buf.WriteByte('\n')
-				emitYAML(buf, item, depth+1)
+				emitYAML(buf, child, depth+1)
 			default:
 				emitYAMLScalar(buf, item)
 			}
@@ -66,6 +68,33 @@ func emitYAML(buf *strings.Builder, v any, depth int) {
 
 	default:
 		emitYAMLScalar(buf, v)
+	}
+}
+
+// emitYAMLMapInline writes a map where the first key follows "- " on the same line.
+func emitYAMLMapInline(buf *strings.Builder, m map[string]any, depth int) {
+	pad := strings.Repeat("  ", depth)
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for i, k := range keys {
+		if i > 0 {
+			buf.WriteString(pad)
+		}
+		buf.WriteString(yamlKey(k))
+		buf.WriteByte(':')
+		child := m[k]
+		switch child.(type) {
+		case map[string]any, []any:
+			buf.WriteByte('\n')
+			emitYAML(buf, child, depth+1)
+		default:
+			buf.WriteByte(' ')
+			emitYAMLScalar(buf, child)
+		}
 	}
 }
 

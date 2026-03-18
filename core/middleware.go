@@ -2,6 +2,7 @@ package core
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -82,7 +83,8 @@ func applyGuard(g Guard, next http.HandlerFunc, errHandler ErrorHandlerFunc) htt
 // guardReject writes the appropriate error response when a Guard denies access.
 func guardReject(w http.ResponseWriter, err error) {
 	if err != nil {
-		if he, ok := err.(*HTTPError); ok {
+		var he *HTTPError
+		if errors.As(err, &he) {
 			JSON(w, he.Status, ErrorResponse{Code: he.Status, Message: he.Message})
 			return
 		}
