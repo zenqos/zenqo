@@ -17,10 +17,10 @@ import (
 )
 
 var (
-	maxBodySize      atomic.Int64
-	maxUploadSize    atomic.Int64
-	maxFileCount     atomic.Int32
-	maxSingleFile    atomic.Int64
+	maxBodySize   atomic.Int64
+	maxUploadSize atomic.Int64
+	maxFileCount  atomic.Int32
+	maxSingleFile atomic.Int64
 )
 
 func init() {
