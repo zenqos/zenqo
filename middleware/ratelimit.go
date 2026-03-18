@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -29,7 +30,11 @@ func DefaultRateLimitConfig() RateLimitConfig {
 		Max:    100,
 		Window: time.Minute,
 		KeyFunc: func(r *http.Request) string {
-			return r.RemoteAddr
+			host, _, err := net.SplitHostPort(r.RemoteAddr)
+			if err != nil {
+				return r.RemoteAddr
+			}
+			return host
 		},
 		OnLimit: func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")

@@ -1,9 +1,12 @@
 package middleware
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
+
+	zlog "github.com/zenqos/zenqo/internal/log"
 )
 
 // RealIP is a middleware that sets r.RemoteAddr to the client's real IP
@@ -89,14 +92,15 @@ func realIPFromHeaders(r *http.Request) string {
 	return ""
 }
 
-// parseCIDRs parses a slice of CIDR strings, silently ignoring invalid entries.
 func parseCIDRs(cidrs []string) []*net.IPNet {
 	result := make([]*net.IPNet, 0, len(cidrs))
 	for _, c := range cidrs {
 		_, ipNet, err := net.ParseCIDR(c)
-		if err == nil {
-			result = append(result, ipNet)
+		if err != nil {
+			zlog.Warn("RealIP", fmt.Sprintf("invalid CIDR %q: %v", c, err))
+			continue
 		}
+		result = append(result, ipNet)
 	}
 	return result
 }

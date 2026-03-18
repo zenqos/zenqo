@@ -38,7 +38,20 @@ func DefaultCORSConfig() CORSConfig {
 func CORS(configs ...CORSConfig) func(http.Handler) http.Handler {
 	cfg := DefaultCORSConfig()
 	if len(configs) > 0 {
-		cfg = configs[0]
+		c := configs[0]
+		if len(c.AllowOrigins) > 0 {
+			cfg.AllowOrigins = c.AllowOrigins
+		}
+		if len(c.AllowMethods) > 0 {
+			cfg.AllowMethods = c.AllowMethods
+		}
+		if len(c.AllowHeaders) > 0 {
+			cfg.AllowHeaders = c.AllowHeaders
+		}
+		if c.MaxAge != 0 {
+			cfg.MaxAge = c.MaxAge
+		}
+		cfg.AllowCredentials = c.AllowCredentials
 	}
 
 	// Guard against the invalid combination of wildcard origin + credentials.
