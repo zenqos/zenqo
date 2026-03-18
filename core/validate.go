@@ -94,12 +94,12 @@ func validateWithPrefix(v any, prefix string, seen map[uintptr]bool) error {
 		}
 
 		rules := strings.Split(tag, ",")
-		for _, rule := range rules {
+		for ri, rule := range rules {
 			rule = strings.TrimSpace(rule)
 
-			// dive: validate each element of slice/array
 			if rule == "dive" {
 				if fv.Kind() == reflect.Slice || fv.Kind() == reflect.Array {
+					elemRules := rules[ri+1:]
 					for j := 0; j < fv.Len(); j++ {
 						elemPath := fmt.Sprintf("%s[%d]", qualifiedName, j)
 						elem := fv.Index(j)
@@ -116,10 +116,18 @@ func validateWithPrefix(v any, prefix string, seen map[uintptr]bool) error {
 									errs = append(errs, ve.Errors...)
 								}
 							}
+						} else {
+							for _, er := range elemRules {
+								er = strings.TrimSpace(er)
+								if msg := checkRule(er, elem, elemPath); msg != "" {
+									errs = append(errs, FieldError{Field: elemPath, Message: msg})
+									break
+								}
+							}
 						}
 					}
 				}
-				continue
+				break
 			}
 
 			if msg := checkRule(rule, fv, qualifiedName); msg != "" {

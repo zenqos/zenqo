@@ -71,7 +71,7 @@ func checkMin(param string, fv reflect.Value, field string) string {
 	case reflect.String:
 		n, err := strconv.Atoi(param)
 		if err != nil {
-			return ""
+			panic(fmt.Sprintf("zenqo: invalid min parameter %q for field %s", param, field))
 		}
 		if fv.Len() < n {
 			return fmt.Sprintf("%s must be at least %d characters", field, n)
@@ -79,7 +79,7 @@ func checkMin(param string, fv reflect.Value, field string) string {
 	case reflect.Slice, reflect.Array, reflect.Map:
 		n, err := strconv.Atoi(param)
 		if err != nil {
-			return ""
+			panic(fmt.Sprintf("zenqo: invalid min parameter %q for field %s", param, field))
 		}
 		if fv.Len() < n {
 			return fmt.Sprintf("%s must have at least %d items", field, n)
@@ -87,7 +87,7 @@ func checkMin(param string, fv reflect.Value, field string) string {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		n, err := strconv.ParseFloat(param, 64)
 		if err != nil {
-			return ""
+			panic(fmt.Sprintf("zenqo: invalid min parameter %q for field %s", param, field))
 		}
 		if fv.Int() < int64(n) {
 			return fmt.Sprintf("%s must be at least %s", field, param)
@@ -95,7 +95,7 @@ func checkMin(param string, fv reflect.Value, field string) string {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		n, err := strconv.ParseFloat(param, 64)
 		if err != nil {
-			return ""
+			panic(fmt.Sprintf("zenqo: invalid min parameter %q for field %s", param, field))
 		}
 		if fv.Uint() < uint64(n) {
 			return fmt.Sprintf("%s must be at least %s", field, param)
@@ -103,7 +103,7 @@ func checkMin(param string, fv reflect.Value, field string) string {
 	case reflect.Float32, reflect.Float64:
 		n, err := strconv.ParseFloat(param, 64)
 		if err != nil {
-			return ""
+			panic(fmt.Sprintf("zenqo: invalid min parameter %q for field %s", param, field))
 		}
 		if fv.Float() < n {
 			return fmt.Sprintf("%s must be at least %s", field, param)
@@ -117,7 +117,7 @@ func checkMax(param string, fv reflect.Value, field string) string {
 	case reflect.String:
 		n, err := strconv.Atoi(param)
 		if err != nil {
-			return ""
+			panic(fmt.Sprintf("zenqo: invalid max parameter %q for field %s", param, field))
 		}
 		if fv.Len() > n {
 			return fmt.Sprintf("%s must be at most %d characters", field, n)
@@ -125,7 +125,7 @@ func checkMax(param string, fv reflect.Value, field string) string {
 	case reflect.Slice, reflect.Array, reflect.Map:
 		n, err := strconv.Atoi(param)
 		if err != nil {
-			return ""
+			panic(fmt.Sprintf("zenqo: invalid max parameter %q for field %s", param, field))
 		}
 		if fv.Len() > n {
 			return fmt.Sprintf("%s must have at most %d items", field, n)
@@ -133,7 +133,7 @@ func checkMax(param string, fv reflect.Value, field string) string {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		n, err := strconv.ParseFloat(param, 64)
 		if err != nil {
-			return ""
+			panic(fmt.Sprintf("zenqo: invalid max parameter %q for field %s", param, field))
 		}
 		if fv.Int() > int64(n) {
 			return fmt.Sprintf("%s must be at most %s", field, param)
@@ -141,7 +141,7 @@ func checkMax(param string, fv reflect.Value, field string) string {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		n, err := strconv.ParseFloat(param, 64)
 		if err != nil {
-			return ""
+			panic(fmt.Sprintf("zenqo: invalid max parameter %q for field %s", param, field))
 		}
 		if fv.Uint() > uint64(n) {
 			return fmt.Sprintf("%s must be at most %s", field, param)
@@ -149,7 +149,7 @@ func checkMax(param string, fv reflect.Value, field string) string {
 	case reflect.Float32, reflect.Float64:
 		n, err := strconv.ParseFloat(param, 64)
 		if err != nil {
-			return ""
+			panic(fmt.Sprintf("zenqo: invalid max parameter %q for field %s", param, field))
 		}
 		if fv.Float() > n {
 			return fmt.Sprintf("%s must be at most %s", field, param)
@@ -173,22 +173,38 @@ func checkEmail(fv reflect.Value, field string) string {
 }
 
 func checkOneOf(param string, fv reflect.Value, field string) string {
-	if fv.Kind() != reflect.String {
-		return ""
-	}
-	s := fv.String()
-	if s == "" {
-		return ""
-	}
 	allowed := strings.Split(param, "|")
-	trimmed := make([]string, len(allowed))
-	for i, a := range allowed {
-		trimmed[i] = strings.TrimSpace(a)
-		if s == trimmed[i] {
+	switch fv.Kind() {
+	case reflect.String:
+		s := fv.String()
+		if s == "" {
 			return ""
 		}
+		for _, a := range allowed {
+			if s == strings.TrimSpace(a) {
+				return ""
+			}
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v := fv.Int()
+		for _, a := range allowed {
+			n, err := strconv.ParseInt(strings.TrimSpace(a), 10, 64)
+			if err == nil && v == n {
+				return ""
+			}
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		v := fv.Uint()
+		for _, a := range allowed {
+			n, err := strconv.ParseUint(strings.TrimSpace(a), 10, 64)
+			if err == nil && v == n {
+				return ""
+			}
+		}
+	default:
+		return ""
 	}
-	return fmt.Sprintf("%s must be one of: %s", field, strings.Join(trimmed, ", "))
+	return fmt.Sprintf("%s must be one of: %s", field, strings.ReplaceAll(param, "|", ", "))
 }
 
 // checkURL validates that the field is a syntactically valid absolute URL with
