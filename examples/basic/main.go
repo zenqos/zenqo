@@ -2,7 +2,7 @@
 //
 // Run:
 //
-//	go run .
+//	zenqo dev
 //
 // Test:
 //
@@ -19,5 +19,7 @@ import (
 
 func main() {
 	cfg := config.Load()
-	log.Fatal(app.New(cfg).Start(":" + cfg.Port))
+	if err := app.New(cfg).Start(":" + cfg.Port); err != nil {
+		log.Fatal(err)
+	}
 }

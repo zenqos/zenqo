@@ -10,19 +10,20 @@ Zenqo는 표준 Go 미들웨어를 사용합니다: `func(http.Handler) http.Han
 |----------|------|
 | `middleware.Logger` | 상태 코드, 지연 시간, IP를 포함한 구조화된 요청/응답 로깅 |
 | `middleware.RequestID` | `X-Request-Id` 주입 (기존 헤더 검증 또는 새로 생성) |
-| `middleware.RealIP` | `X-Forwarded-For` 또는 `X-Real-IP`에서 실제 클라이언트 IP를 `r.RemoteAddr`에 설정 |
+| `middleware.RealIPWithConfig()` | 신뢰할 수 있는 프록시의 헤더에서 `r.RemoteAddr` 설정 |
 | `middleware.CORS()` | 설정 가능한 CORS 헤더 |
-| `middleware.SecureHeaders` | 보안 헤더: CSP, HSTS, X-Frame-Options 등 |
-| `middleware.RateLimit()` | IP당 고정 윈도우 요청 횟수 제한 |
+| `middleware.SecureHeaders()` | 보안 헤더: CSP, HSTS, X-Frame-Options 등 |
+| `middleware.RateLimit()` | 슬라이딩 윈도우 IP당 요청 횟수 제한 |
+| `middleware.CSRF()` | 이중 제출 쿠키 방식 CSRF 보호 |
 
-`Logger`, `RequestID`, `RealIP`, 패닉 복구는 `core.NewApp()` 사용 시 자동으로 등록됩니다.
+`Logger`, `RequestID`, `RealIP` (사설 네트워크 CIDR), 패닉 복구는 `core.NewApp()` 사용 시 자동으로 등록됩니다.
 
 ## 미들웨어 적용
 
 ```go
 // 전역
 app.Use(middleware.CORS())
-app.Use(middleware.SecureHeaders)
+app.Use(middleware.SecureHeaders())
 
 // 컨트롤러 수준
 c.UseControllerMiddleware(middleware.RateLimit())
@@ -35,14 +36,24 @@ c.GET("/upload", c.upload).Use(myMiddleware)
 
 ```go
 app.Use(middleware.CORS(middleware.CORSConfig{
-    AllowedOrigins: []string{"https://example.com"},
-    AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
-    AllowedHeaders: []string{"Authorization", "Content-Type"},
-    MaxAge:         86400,
+    AllowOrigins: []string{"https://example.com"},
+    AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
+    AllowHeaders: []string{"Authorization", "Content-Type"},
+    MaxAge:       86400,
 }))
 ```
 
-인자 없이 호출하면 관대한 기본값(모든 오리진, 일반 메서드)이 적용됩니다.
+인자 없이 호출하면 관대한 기본값(모든 오리진, 일반 메서드)이 적용됩니다. 부분 설정은 기본값과 병합됩니다 — 필요한 것만 오버라이드하세요.
+
+## RealIP
+
+기본적으로 `NewApp()`은 사설 네트워크 CIDR의 프록시 헤더만 신뢰합니다. 커스터마이즈:
+
+```go
+app.Use(middleware.RealIPWithConfig(middleware.RealIPConfig{
+    TrustedProxies: []string{"10.0.0.0/8", "172.16.0.0/12"},
+}))
+```
 
 ## 요청 횟수 제한 (Rate Limiting)
 

@@ -40,9 +40,9 @@ app.UseController(NewUserController(svc))
 | `POST` | 201 Created |
 | `PUT` | 200 OK |
 | `PATCH` | 200 OK |
-| `DELETE` | 204 No Content |
+| `DELETE` | 200 OK |
 
-Returning `nil` data from any method also yields 204.
+Returning `nil` data from any method yields 204 No Content.
 
 ## Route-Level Configuration
 
@@ -55,7 +55,7 @@ c.GET("/{id}", c.getOne).
     Use(myMiddleware)
 ```
 
-Available chain methods: `UseGuard`, `UseInterceptor`, `Use`
+Available chain methods: `UseGuard`, `UseInterceptor`, `Use`, `Summary`, `Description`, `Tags`, `Body`, `Response`, `Deprecated`, `NoSecurity`
 
 ## Controller-Level Guards / Interceptors / Middleware
 
