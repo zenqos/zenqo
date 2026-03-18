@@ -53,8 +53,9 @@ func NewApp() *App {
 // Use this to bring your own router while keeping the rest of Zenqo's features.
 func NewAppWith(adapter RouterAdapter) *App {
 	adapter.Use(middleware.RequestID)
-	adapter.Use(middleware.RealIP)
-	adapter.Use(zenqoRecoverer)
+	adapter.Use(middleware.RealIPWithConfig(middleware.RealIPConfig{
+		TrustedProxies: []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "::1/128"},
+	}))
 	adapter.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		Error(w, 404, "not found")
 	})
