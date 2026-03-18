@@ -196,9 +196,8 @@ func TestBindBodyTooLarge(t *testing.T) {
 	type dto struct {
 		Data string
 	}
-	old := MaxBodySize
-	MaxBodySize = 10
-	defer func() { MaxBodySize = old }()
+	SetMaxBodySize(10)
+	defer SetMaxBodySize(1 << 20)
 
 	bigBody := `{"data":"` + strings.Repeat("x", 100) + `"}`
 	r := httptest.NewRequest("POST", "/", strings.NewReader(bigBody))
