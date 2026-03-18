@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -80,6 +81,96 @@ func Bind[T any](r *http.Request) (T, error) {
 //	page := core.BindQuery(r, "page")  // GET /users?page=2
 func BindQuery(r *http.Request, key string) string {
 	return r.URL.Query().Get(key)
+}
+
+// BindQueryStruct binds URL query parameters to a typed struct.
+// Fields must be tagged with `query:"key"` to map query keys to struct fields.
+// Supports string, int, int64, uint, uint64, float32, float64, bool, and []string.
+// Validation tags (`validate:"..."`) are applied after binding.
+//
+// Example:
+//
+//	type ListQuery struct {
+//		Page  int    `query:"page"`
+//		Limit int    `query:"limit" validate:"max=100"`
+//		Sort  string `query:"sort"  validate:"oneof=asc|desc"`
+//		Tags  []string `query:"tag"`
+//	}
+//
+//	q, err := core.BindQueryStruct[ListQuery](r)
+func BindQueryStruct[T any](r *http.Request) (T, error) {
+	var v T
+	rv := reflect.ValueOf(&v).Elem()
+	rt := rv.Type()
+	query := r.URL.Query()
+
+	for i := 0; i < rt.NumField(); i++ {
+		sf := rt.Field(i)
+		if !sf.IsExported() {
+			continue
+		}
+		key := sf.Tag.Get("query")
+		if key == "" || key == "-" {
+			continue
+		}
+
+		fv := rv.Field(i)
+
+		// []string: collect all values for the key
+		if sf.Type == reflect.TypeOf([]string{}) {
+			if vals, ok := query[key]; ok {
+				fv.Set(reflect.ValueOf(vals))
+			}
+			continue
+		}
+
+		raw := query.Get(key)
+		if raw == "" {
+			continue
+		}
+
+		if err := setFieldFromString(fv, raw, key); err != nil {
+			return v, err
+		}
+	}
+
+	if err := validate(v); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+// setFieldFromString converts a string value and sets it on the reflect.Value.
+func setFieldFromString(fv reflect.Value, raw, key string) error {
+	switch fv.Kind() {
+	case reflect.String:
+		fv.SetString(raw)
+	case reflect.Int, reflect.Int64:
+		n, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return ErrBadRequest(fmt.Sprintf("invalid query parameter %q: expected integer", key))
+		}
+		fv.SetInt(n)
+	case reflect.Uint, reflect.Uint64:
+		n, err := strconv.ParseUint(raw, 10, 64)
+		if err != nil {
+			return ErrBadRequest(fmt.Sprintf("invalid query parameter %q: expected unsigned integer", key))
+		}
+		fv.SetUint(n)
+	case reflect.Float32, reflect.Float64:
+		n, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			return ErrBadRequest(fmt.Sprintf("invalid query parameter %q: expected number", key))
+		}
+		fv.SetFloat(n)
+	case reflect.Bool:
+		b, err := strconv.ParseBool(raw)
+		if err != nil {
+			return ErrBadRequest(fmt.Sprintf("invalid query parameter %q: expected boolean", key))
+		}
+		fv.SetBool(b)
+	}
+	return nil
 }
 
 // BindHeader reads a named header from the request.

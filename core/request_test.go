@@ -150,6 +150,131 @@ func TestBindQuerySpecialChars(t *testing.T) {
 	}
 }
 
+// --- BindQueryStruct tests ---
+
+func TestBindQueryStructBasic(t *testing.T) {
+	type Q struct {
+		Page  int    `query:"page"`
+		Limit int    `query:"limit"`
+		Sort  string `query:"sort"`
+	}
+	r, _ := http.NewRequest("GET", "/users?page=2&limit=10&sort=asc", nil)
+	q, err := BindQueryStruct[Q](r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.Page != 2 {
+		t.Errorf("Page = %d, want 2", q.Page)
+	}
+	if q.Limit != 10 {
+		t.Errorf("Limit = %d, want 10", q.Limit)
+	}
+	if q.Sort != "asc" {
+		t.Errorf("Sort = %q, want %q", q.Sort, "asc")
+	}
+}
+
+func TestBindQueryStructSlice(t *testing.T) {
+	type Q struct {
+		Tags []string `query:"tag"`
+	}
+	r, _ := http.NewRequest("GET", "/search?tag=go&tag=rust", nil)
+	q, err := BindQueryStruct[Q](r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(q.Tags) != 2 || q.Tags[0] != "go" || q.Tags[1] != "rust" {
+		t.Errorf("Tags = %v, want [go rust]", q.Tags)
+	}
+}
+
+func TestBindQueryStructBoolFloat(t *testing.T) {
+	type Q struct {
+		Active bool    `query:"active"`
+		Score  float64 `query:"score"`
+	}
+	r, _ := http.NewRequest("GET", "/items?active=true&score=9.5", nil)
+	q, err := BindQueryStruct[Q](r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !q.Active {
+		t.Error("Active = false, want true")
+	}
+	if q.Score != 9.5 {
+		t.Errorf("Score = %f, want 9.5", q.Score)
+	}
+}
+
+func TestBindQueryStructMissing(t *testing.T) {
+	type Q struct {
+		Page int    `query:"page"`
+		Sort string `query:"sort"`
+	}
+	r, _ := http.NewRequest("GET", "/users", nil)
+	q, err := BindQueryStruct[Q](r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.Page != 0 {
+		t.Errorf("Page = %d, want 0", q.Page)
+	}
+	if q.Sort != "" {
+		t.Errorf("Sort = %q, want empty", q.Sort)
+	}
+}
+
+func TestBindQueryStructInvalidInt(t *testing.T) {
+	type Q struct {
+		Page int `query:"page"`
+	}
+	r, _ := http.NewRequest("GET", "/users?page=abc", nil)
+	_, err := BindQueryStruct[Q](r)
+	if err == nil {
+		t.Fatal("expected error for invalid int")
+	}
+}
+
+func TestBindQueryStructValidation(t *testing.T) {
+	type Q struct {
+		Limit int `query:"limit" validate:"max=100"`
+	}
+	r, _ := http.NewRequest("GET", "/users?limit=200", nil)
+	_, err := BindQueryStruct[Q](r)
+	if err == nil {
+		t.Fatal("expected validation error for limit > 100")
+	}
+}
+
+func TestBindQueryStructNoTag(t *testing.T) {
+	type Q struct {
+		Page   int `query:"page"`
+		Hidden int // no query tag — should be ignored
+	}
+	r, _ := http.NewRequest("GET", "/users?page=1&Hidden=99", nil)
+	q, err := BindQueryStruct[Q](r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.Hidden != 0 {
+		t.Errorf("Hidden = %d, want 0 (should be ignored)", q.Hidden)
+	}
+}
+
+func TestBindQueryStructDashTag(t *testing.T) {
+	type Q struct {
+		Skip int `query:"-"`
+	}
+	r, _ := http.NewRequest("GET", "/users?Skip=5", nil)
+	q, err := BindQueryStruct[Q](r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.Skip != 0 {
+		t.Errorf("Skip = %d, want 0", q.Skip)
+	}
+}
+
 // --- BindHeader edge-case tests ---
 
 func TestBindHeaderPresent(t *testing.T) {
