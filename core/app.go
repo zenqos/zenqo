@@ -28,6 +28,7 @@ type App struct {
 	errorHandler    ErrorHandlerFunc
 	shutdownTimeout time.Duration
 	rfc9457         bool
+	docsPath        string // set by OpenAPI Mount to show docs URL at startup
 }
 
 // errorHandlerSetter is satisfied by any Controller that embeds BaseController.
@@ -103,6 +104,10 @@ func (a *App) SetGlobalPrefix(prefix string) *App {
 // Prefix returns the global URL prefix set via SetGlobalPrefix.
 // Returns an empty string if no prefix has been configured.
 func (a *App) Prefix() string { return a.prefix }
+
+// SetDocsPath stores the OpenAPI docs path for display at startup.
+// Called internally by openapi.Mount().
+func (a *App) SetDocsPath(path string) { a.docsPath = path }
 
 // SetShutdownTimeout sets the maximum duration to wait for in-flight requests
 // to complete when the server receives SIGINT or SIGTERM.
@@ -250,6 +255,9 @@ func (a *App) Start(addr string) error {
 	}
 	elapsed := time.Since(started).Milliseconds()
 	zlog.Log("Server", fmt.Sprintf("Listening on %s  +%dms", host, elapsed))
+	if a.docsPath != "" {
+		zlog.Log("Server", fmt.Sprintf("API Docs   %s%s", host, a.docsPath))
+	}
 
 	srv := &http.Server{
 		Addr:         addr,

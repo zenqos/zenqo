@@ -170,4 +170,5 @@ func Mount(app *core.App, cfg Config) {
 		fmt.Fprintf(w, swaggerUIHTML, escapedTitle, string(urlJSON)) //nolint:errcheck
 	})
 	app.UseController(ctrl)
+	app.SetDocsPath(app.Prefix() + docsPath)
 }
