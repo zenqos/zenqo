@@ -204,7 +204,7 @@ func checkOneOf(param string, fv reflect.Value, field string) string {
 	default:
 		return ""
 	}
-	return fmt.Sprintf("%s must be one of: %s", field, strings.Join(trimmed, ", "))
+	return fmt.Sprintf("%s must be one of: %s", field, strings.ReplaceAll(param, "|", ", "))
 }
 
 // checkURL validates that the field is a syntactically valid absolute URL with
