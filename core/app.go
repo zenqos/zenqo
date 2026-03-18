@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -54,7 +55,6 @@ func NewApp() *App {
 func NewAppWith(adapter RouterAdapter) *App {
 	adapter.Use(middleware.RequestID)
 	adapter.Use(middleware.RealIP)
-	adapter.Use(zenqoRecoverer)
 	adapter.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		Error(w, 404, "not found")
 	})
@@ -167,8 +167,8 @@ func (a *App) UseStatic(prefix, dir string) *App {
 
 func (a *App) buildRoutes() {
 	a.buildOnce.Do(func() {
-		// Resolve the effective error handler and propagate to all controllers
-		// before RegisterRoutes is called so every route gets the right handler.
+		a.adapter.Use(middleware.Logger)
+
 		errHandler := a.errorHandler
 		if errHandler == nil {
 			errHandler = DefaultErrorHandler
@@ -187,7 +187,6 @@ func (a *App) buildRoutes() {
 			}
 		}
 
-		// RFC 9457: re-register 404/405 and recoverer in problem+json format
 		if a.rfc9457 {
 			a.adapter.NotFound(func(w http.ResponseWriter, r *http.Request) {
 				ProblemJSON(w, ProblemDetail{Status: 404, Instance: r.URL.Path})
@@ -195,8 +194,8 @@ func (a *App) buildRoutes() {
 			a.adapter.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 				ProblemJSON(w, ProblemDetail{Status: 405, Instance: r.URL.Path})
 			})
-			a.adapter.Use(zenqoRecovererWith(errHandler))
 		}
+		a.adapter.Use(zenqoRecovererWith(errHandler))
 
 		for _, g := range a.globalGuards {
 			a.adapter.Use(guardToMiddleware(g, errHandler))
@@ -226,7 +225,6 @@ func (a *App) buildRoutes() {
 
 func (a *App) Start(addr string) error {
 	started := time.Now()
-	a.adapter.Use(middleware.Logger)
 	a.buildRoutes()
 
 	zlog.Log("Boot", "Starting application...")
@@ -252,6 +250,8 @@ func (a *App) Start(addr string) error {
 	host := addr
 	if len(host) > 0 && host[0] == ':' {
 		host = "http://localhost" + host
+	} else if strings.HasPrefix(host, "0.0.0.0") {
+		host = "http://localhost" + host[len("0.0.0.0"):]
 	}
 	elapsed := time.Since(started).Milliseconds()
 	zlog.Log("Server", fmt.Sprintf("Listening on %s  +%dms", host, elapsed))
@@ -267,9 +267,10 @@ func (a *App) Start(addr string) error {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
 	go func() {
-		quit := make(chan os.Signal, 1)
-		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 		<-quit
 		zlog.Log("Server", "Shutting down gracefully...")
 		ctx, cancel := context.WithTimeout(context.Background(), a.shutdownTimeout)
@@ -279,7 +280,10 @@ func (a *App) Start(addr string) error {
 		}
 	}()
 
-	return srv.ListenAndServe()
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }
 
 // Handler builds all routes and returns the underlying http.Handler.

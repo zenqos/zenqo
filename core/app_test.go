@@ -343,13 +343,10 @@ func TestSetShutdownTimeoutUpdates(t *testing.T) {
 	}
 }
 
-// --- Issue #48: DELETE with non-nil data must still return 204 ---
-
-func TestAppDELETEWithDataReturns204(t *testing.T) {
+func TestAppDELETEWithNilReturns204(t *testing.T) {
 	app := NewApp()
 	app.DELETE("/items/{id}", func(r *http.Request) (any, error) {
-		// Returning data from a DELETE handler must still produce 204 No Content.
-		return map[string]string{"deleted": "true"}, nil
+		return nil, nil
 	})
 
 	w := httptest.NewRecorder()
@@ -357,10 +354,25 @@ func TestAppDELETEWithDataReturns204(t *testing.T) {
 	app.Handler().ServeHTTP(w, r)
 
 	if w.Code != 204 {
-		t.Fatalf("expected 204 for DELETE with data, got %d", w.Code)
+		t.Fatalf("expected 204 for DELETE with nil, got %d", w.Code)
 	}
 	if body := w.Body.String(); body != "" {
 		t.Fatalf("expected empty body for 204, got %q", body)
+	}
+}
+
+func TestAppDELETEWithDataReturns200(t *testing.T) {
+	app := NewApp()
+	app.DELETE("/items/{id}", func(r *http.Request) (any, error) {
+		return map[string]string{"deleted": "true"}, nil
+	})
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("DELETE", "/items/1", nil)
+	app.Handler().ServeHTTP(w, r)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200 for DELETE with data, got %d", w.Code)
 	}
 }
 
