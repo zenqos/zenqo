@@ -41,7 +41,7 @@ func getUser(r *http.Request) (any, error) {
 ```bash
 go install github.com/zenqos/zenqo/cmd/zenqo@latest
 zenqo new my-app
-cd my-app && go run .
+cd my-app && zenqo dev
 ```
 
 → Full guide: [Getting Started](./docs/getting-started.md)
@@ -50,11 +50,14 @@ cd my-app && go run .
 
 - **Return-value handlers** — `(any, error)` signature, automatic JSON & status codes
 - **Controllers** — group routes under a base path with `BaseController`
-- **Bind & Validate** — `Bind[T]` decodes JSON and runs struct validation in one call
+- **Bind & Validate** — `Bind[T]` decodes JSON, `BindQueryStruct[T]` binds query params, both run struct validation
 - **Guards & Interceptors** — access control and lifecycle hooks at route, controller, or global level
-- **Error handling** — panic recovery, typed errors, customizable global error handler
+- **Error handling** — panic recovery, typed errors, RFC 9457 Problem Details, customizable global error handler
 - **Auto camelCase** — struct fields serialize as camelCase without `json` tags
-- **Built-in middleware** — CORS, secure headers, request ID, panic recovery
+- **OpenAPI 3.1** — auto-generated spec from route metadata, Swagger UI, security schemes
+- **Built-in middleware** — CORS, rate limiting, secure headers, request ID, CSRF, real IP
+- **File uploads** — `BindFile` / `BindFiles` with size limits and content-type detection
+- **CLI** — `zenqo new`, `zenqo generate`, `zenqo dev` with optional `--watch` hot reload
 
 ## Examples
 
@@ -67,8 +70,10 @@ cd my-app && go run .
 | Topic | EN | KO |
 |-------|----|----|
 | Getting Started | [→](./docs/getting-started.md) | [→](./docs/getting-started.ko.md) |
+| CLI | [→](./docs/cli.md) | [→](./docs/cli.ko.md) |
 | Controllers | [→](./docs/controllers.md) | [→](./docs/controllers.ko.md) |
 | Request Binding | [→](./docs/request-binding.md) | [→](./docs/request-binding.ko.md) |
+| Validation | [→](./docs/validation.md) | [→](./docs/validation.ko.md) |
 | Error Handling | [→](./docs/error-handling.md) | [→](./docs/error-handling.ko.md) |
 | Guards & Interceptors | [→](./docs/guards-interceptors.md) | [→](./docs/guards-interceptors.ko.md) |
 | Middleware | [→](./docs/middleware.md) | [→](./docs/middleware.ko.md) |
