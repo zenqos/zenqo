@@ -29,7 +29,7 @@ const swaggerUIHTML = `<!DOCTYPE html>
       deepLinking: true,
       presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
       layout: 'BaseLayout',
-      tryItOutEnabled: true,
+      tryItOutEnabled: %s,
     });
   </script>
 </body>

@@ -58,6 +58,9 @@ type Config struct {
 	//
 	// Set to false to opt out and document error responses manually.
 	AutoErrorResponses *bool
+	// TryItOutEnabled controls whether the "Try it out" button is pre-activated
+	// in Swagger UI for all endpoints (default: false — standard Swagger UI behavior).
+	TryItOutEnabled *bool
 	// UseRFC9457 controls the error schema used for auto-injected error
 	// responses. When true, ProblemDetail is used instead of ErrorResponse.
 	UseRFC9457 bool
@@ -101,6 +104,11 @@ func Mount(app *core.App, cfg Config) {
 	// - fullSpecURL is placed inside a JS string literal → JSON-encode (includes quotes).
 	escapedTitle := html.EscapeString(cfg.Title)
 	urlJSON, _ := json.Marshal(fullSpecURL) // e.g. `"/api/openapi.json"`
+
+	tryItOut := "false"
+	if cfg.TryItOutEnabled != nil && *cfg.TryItOutEnabled {
+		tryItOut = "true"
+	}
 
 	// Spec generation is deferred to the first request so that all controllers
 	// registered after Mount() are included in the spec.
@@ -167,7 +175,7 @@ func Mount(app *core.App, cfg Config) {
 	}
 	ctrl.Handle("GET", docsPath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(w, swaggerUIHTML, escapedTitle, string(urlJSON)) //nolint:errcheck
+		fmt.Fprintf(w, swaggerUIHTML, escapedTitle, string(urlJSON), tryItOut) //nolint:errcheck
 	})
 	app.UseController(ctrl)
 }
