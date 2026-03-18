@@ -31,7 +31,7 @@ func (c *UserController) create(r *http.Request) (any, error) {
 **바디 크기 제한** (기본 1 MB):
 
 ```go
-core.MaxBodySize = 5 << 20 // 5 MB; 0으로 설정하면 제한 없음
+core.SetMaxBodySize(5 << 20) // 5 MB; 0으로 설정하면 제한 없음
 ```
 
 ## 유효성 검사 규칙
@@ -39,12 +39,25 @@ core.MaxBodySize = 5 << 20 // 5 MB; 0으로 설정하면 제한 없음
 | 태그 | 설명 |
 |------|------|
 | `required` | 필드가 존재하고 비어있지 않아야 함 |
-| `min=N` | 최소 길이(문자열) 또는 최솟값(숫자) |
-| `max=N` | 최대 길이(문자열) 또는 최댓값(숫자) |
+| `min=N` | 최소 길이(문자열), 최솟값(숫자), 또는 최소 항목 수(슬라이스/맵) |
+| `max=N` | 최대 길이(문자열), 최댓값(숫자), 또는 최대 항목 수(슬라이스/맵) |
+| `len=N` | 정확한 길이 (문자열, 슬라이스, 배열, 맵) |
 | `email` | 유효한 이메일 형식 |
-| `url` | 유효한 URL 형식 |
+| `url` | 유효한 HTTP/HTTPS URL |
 | `uuid` | 유효한 UUID 형식 |
-| `oneof=a\|b\|c` | 나열된 값 중 하나여야 함 |
+| `oneof=a\|b\|c` | 나열된 값 중 하나여야 함 (문자열 또는 정수) |
+| `alpha` | 영문자만 |
+| `alphanum` | 영문자와 숫자만 |
+| `numeric` | 숫자만 |
+| `lowercase` | 소문자여야 함 |
+| `uppercase` | 대문자여야 함 |
+| `contains=sub` | 부분 문자열 포함 |
+| `startswith=pre` | 접두사로 시작 |
+| `endswith=suf` | 접미사로 끝남 |
+| `regex=pattern` | 정규식 패턴 매칭 |
+| `dive` | 슬라이스/배열 각 요소 검증 |
+
+중첩 구조체는 점(.) 구분 필드 경로로 재귀 검증됩니다 (예: `address.city`).
 
 ## 경로 파라미터
 
@@ -58,10 +71,33 @@ name, err := core.Param[string](r, "slug")  // /posts/{slug}
 
 ## 쿼리 파라미터
 
+단일 값:
+
 ```go
 page := core.BindQuery(r, "page")   // GET /users?page=2  →  "2"
 q    := core.BindQuery(r, "q")      // 없으면 "" 반환
 ```
+
+구조체 바인딩 (유효성 검사 포함):
+
+```go
+type ListQuery struct {
+    Page  int      `query:"page"`
+    Limit int      `query:"limit" validate:"max=100"`
+    Sort  string   `query:"sort"  validate:"oneof=asc|desc"`
+    Tags  []string `query:"tag"`
+}
+
+func (c *Controller) list(r *http.Request) (any, error) {
+    q, err := core.BindQueryStruct[ListQuery](r)
+    if err != nil {
+        return nil, err
+    }
+    // q.Page, q.Limit, q.Sort, q.Tags가 타입 변환 및 검증 완료
+}
+```
+
+지원 타입: `string`, `int`, `int64`, `uint`, `uint64`, `float32`, `float64`, `bool`, `[]string`.
 
 ## 헤더
 
@@ -101,10 +137,12 @@ for _, f := range files {
 }
 ```
 
-**업로드 크기 제한** (기본 32 MB):
+**업로드 제한:**
 
 ```go
-core.MaxUploadSize = 64 << 20 // 64 MB
+core.SetMaxUploadSize(64 << 20)    // 전체 폼 크기 (기본 32 MB)
+core.SetMaxFileCount(10)           // 요청당 최대 파일 수 (기본 20)
+core.SetMaxSingleFileSize(5 << 20) // 파일당 최대 크기 (기본 10 MB)
 ```
 
 > **보안 주의:** `Filename`은 서버에서 정제됩니다 (경로 구분자, null 바이트 제거). `ContentType`은 클라이언트 선언값이 아닌 파일 내용으로 감지됩니다. `Filename`을 파일 시스템 경로로 직접 사용하지 마세요.
