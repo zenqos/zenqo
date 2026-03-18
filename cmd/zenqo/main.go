@@ -33,6 +33,8 @@ func main() {
 		err = runNew(os.Args[2:])
 	case "generate", "g":
 		err = runGenerate(os.Args[2:])
+	case "dev":
+		err = runDev(os.Args[2:])
 	default:
 		printUsage()
 		os.Exit(1)
@@ -56,6 +58,7 @@ func printUsage() {
   Zenqo CLI — build Go APIs with less boilerplate
 
 Commands:
+  dev        Run development server
   new        Scaffold a new Zenqo project
   generate   Generate boilerplate code (alias: g)
 
@@ -141,7 +144,7 @@ func runNew(args []string) error {
   Next steps:
 
     cd %s
-    go run .
+    zenqo dev
 
   Your API → http://localhost:%s/api/v1
 
