@@ -43,6 +43,13 @@ type Config struct {
 	YAMLPath string
 	// DocsPath is the URL path that serves the Swagger UI (default: "/docs").
 	DocsPath string
+	// Security defines the global security schemes for the API.
+	// Swagger UI will show the Authorize dialog with lock icons.
+	//
+	// Example:
+	//
+	//	Security: []openapi.SecurityDef{openapi.BearerAuth()}
+	Security []SecurityDef
 	// AutoErrorResponses controls whether standard error responses are
 	// automatically added to every route in the generated spec (default: true).
 	//
