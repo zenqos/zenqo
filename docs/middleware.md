@@ -10,19 +10,20 @@ Zenqo uses standard Go middleware: `func(http.Handler) http.Handler`.
 |------------|-------------|
 | `middleware.Logger` | Structured request/response logging with status, latency, and IP |
 | `middleware.RequestID` | Injects `X-Request-Id` (validates existing header or generates a new one) |
-| `middleware.RealIP` | Sets `r.RemoteAddr` to the real client IP from `X-Forwarded-For` or `X-Real-IP` |
+| `middleware.RealIPWithConfig()` | Sets `r.RemoteAddr` from trusted proxy headers |
 | `middleware.CORS()` | Configurable CORS headers |
-| `middleware.SecureHeaders` | Security headers: CSP, HSTS, X-Frame-Options, etc. |
-| `middleware.RateLimit()` | Fixed-window per-IP rate limiting |
+| `middleware.SecureHeaders()` | Security headers: CSP, HSTS, X-Frame-Options, etc. |
+| `middleware.RateLimit()` | Sliding-window per-IP rate limiting |
+| `middleware.CSRF()` | CSRF protection with double-submit cookie pattern |
 
-`Logger`, `RequestID`, `RealIP`, and panic recovery are registered automatically when using `core.NewApp()`.
+`Logger`, `RequestID`, `RealIP` (private network CIDRs), and panic recovery are registered automatically when using `core.NewApp()`.
 
 ## Apply Middleware
 
 ```go
 // Global
 app.Use(middleware.CORS())
-app.Use(middleware.SecureHeaders)
+app.Use(middleware.SecureHeaders())
 
 // Controller-level
 c.UseControllerMiddleware(middleware.RateLimit())
@@ -35,14 +36,24 @@ c.GET("/upload", c.upload).Use(myMiddleware)
 
 ```go
 app.Use(middleware.CORS(middleware.CORSConfig{
-    AllowedOrigins: []string{"https://example.com"},
-    AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
-    AllowedHeaders: []string{"Authorization", "Content-Type"},
-    MaxAge:         86400,
+    AllowOrigins: []string{"https://example.com"},
+    AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
+    AllowHeaders: []string{"Authorization", "Content-Type"},
+    MaxAge:       86400,
 }))
 ```
 
-Call with no arguments for permissive defaults (all origins, common methods).
+Call with no arguments for permissive defaults (all origins, common methods). Partial config merges with defaults — only override what you need.
+
+## RealIP
+
+By default, `NewApp()` trusts proxy headers from private network CIDRs only. To customize:
+
+```go
+app.Use(middleware.RealIPWithConfig(middleware.RealIPConfig{
+    TrustedProxies: []string{"10.0.0.0/8", "172.16.0.0/12"},
+}))
+```
 
 ## Rate Limiting
 

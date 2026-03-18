@@ -16,21 +16,25 @@ brew install zenqos/tap/zenqo
 
 ```bash
 zenqo new my-app
-cd my-app && go run .
+cd my-app && zenqo dev
 ```
 
 This generates a ready-to-run project with the recommended directory layout:
 
 ```
 my-app/
-├── cmd/my-app/main.go         # entry point
+├── main.go                    # entry point
 ├── internal/
 │   ├── app/app.go             # register controllers
-│   └── example/               # generated feature module
-│       ├── controller.go
-│       ├── service.go
-│       └── dto.go
-└── go.mod
+│   └── config/config.go       # environment config
+├── go.mod
+└── .gitignore
+```
+
+Add features with the generator:
+
+```bash
+zenqo generate resource user   # creates internal/user/ with handler, service, dto, test
 ```
 
 ## Hello World (no CLI)
@@ -51,7 +55,9 @@ func main() {
         return map[string]string{"message": "Hello, Zenqo!"}, nil
     })
 
-    log.Fatal(app.Start(":3000"))
+    if err := app.Start(":3000"); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
@@ -93,6 +99,18 @@ zenqo generate interceptor logging
 handler := app.Handler() // builds routes, returns http.Handler
 ts := httptest.NewServer(handler)
 defer ts.Close()
+```
+
+## CLI Commands
+
+```bash
+zenqo new <name>                 # scaffold new project
+zenqo dev                        # run development server
+zenqo dev --watch                # run with hot reload (restart on .go file changes)
+zenqo generate resource <name>   # controller + service + dto + test
+zenqo generate controller <name> # controller only
+zenqo generate guard <name>      # guard boilerplate
+zenqo generate interceptor <name># interceptor boilerplate
 ```
 
 ## Next Steps

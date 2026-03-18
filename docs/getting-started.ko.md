@@ -16,21 +16,25 @@ brew install zenqos/tap/zenqo
 
 ```bash
 zenqo new my-app
-cd my-app && go run .
+cd my-app && zenqo dev
 ```
 
 권장 디렉토리 구조로 바로 실행 가능한 프로젝트를 생성합니다:
 
 ```
 my-app/
-├── cmd/my-app/main.go         # 진입점
+├── main.go                    # 진입점
 ├── internal/
 │   ├── app/app.go             # 컨트롤러 등록
-│   └── example/               # 생성된 기능 모듈
-│       ├── controller.go
-│       ├── service.go
-│       └── dto.go
-└── go.mod
+│   └── config/config.go       # 환경 설정
+├── go.mod
+└── .gitignore
+```
+
+제너레이터로 기능 추가:
+
+```bash
+zenqo generate resource user   # internal/user/ 에 handler, service, dto, test 생성
 ```
 
 ## Hello World (CLI 없이)
@@ -51,7 +55,9 @@ func main() {
         return map[string]string{"message": "Hello, Zenqo!"}, nil
     })
 
-    log.Fatal(app.Start(":3000"))
+    if err := app.Start(":3000"); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
@@ -93,6 +99,18 @@ zenqo generate interceptor logging
 handler := app.Handler() // 라우트 빌드 후 http.Handler 반환
 ts := httptest.NewServer(handler)
 defer ts.Close()
+```
+
+## CLI 명령어
+
+```bash
+zenqo new <name>                 # 새 프로젝트 생성
+zenqo dev                        # 개발 서버 실행
+zenqo dev --watch                # 핫 리로드 (.go 파일 변경 시 자동 재시작)
+zenqo generate resource <name>   # 컨트롤러 + 서비스 + DTO + 테스트
+zenqo generate controller <name> # 컨트롤러만
+zenqo generate guard <name>      # 가드 보일러플레이트
+zenqo generate interceptor <name># 인터셉터 보일러플레이트
 ```
 
 ## 다음 단계

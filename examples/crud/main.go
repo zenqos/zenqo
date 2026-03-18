@@ -2,14 +2,14 @@
 //
 // Run:
 //
-//	go run .
+//	zenqo dev
 //
 // Test:
 //
 //	curl http://localhost:3000/api/v1/users
-//	curl -X POST http://localhost:3000/api/v1/users -d '{"name":"Charlie","email":"charlie@example.com"}'
+//	curl -X POST http://localhost:3000/api/v1/users -H 'Content-Type: application/json' -d '{"name":"Charlie","email":"charlie@example.com"}'
 //	curl http://localhost:3000/api/v1/users/1
-//	curl -X PUT http://localhost:3000/api/v1/users/1 -d '{"name":"Alice Kim"}'
+//	curl -X PUT http://localhost:3000/api/v1/users/1 -H 'Content-Type: application/json' -d '{"name":"Alice Kim"}'
 //	curl -X DELETE http://localhost:3000/api/v1/users/1
 package main
 
@@ -22,5 +22,7 @@ import (
 
 func main() {
 	cfg := config.Load()
-	log.Fatal(app.New(cfg).Start(":" + cfg.Port))
+	if err := app.New(cfg).Start(":" + cfg.Port); err != nil {
+		log.Fatal(err)
+	}
 }

@@ -16,12 +16,15 @@ openapi.Mount(app, openapi.Config{
     Version:     "1.0.0",
     Description: "Optional description",
     SpecPath:    "/openapi.json", // default
+    YAMLPath:    "/openapi.yaml", // default (set to "-" to disable)
     DocsPath:    "/docs",         // default
+    Security:    []openapi.SecurityDef{openapi.BearerAuth()}, // optional
 })
 
 app.Start(":3000")
 // Swagger UI: http://localhost:3000/docs
-// Raw spec:   http://localhost:3000/openapi.json
+// JSON spec:  http://localhost:3000/openapi.json
+// YAML spec:  http://localhost:3000/openapi.yaml
 ```
 
 ## Route Annotations
@@ -57,6 +60,7 @@ c.DELETE("/users/{id}", c.remove).
 | `.Body(v)` | Pass a zero-value struct to infer the request body schema |
 | `.Response(status, v)` | Pass a zero-value struct or `nil` for empty bodies |
 | `.Deprecated()` | Mark as deprecated |
+| `.NoSecurity()` | Override global security (mark as public) |
 
 ## Schema Inference
 
@@ -93,6 +97,49 @@ Path parameters are extracted automatically from route paths:
 ```
 /users/{id}  →  parameter: { name: "id", in: "path", required: true }
 ```
+
+## Security Schemes
+
+Add global security schemes via `Config.Security`:
+
+```go
+openapi.Mount(app, openapi.Config{
+    Title:   "My API",
+    Version: "1.0.0",
+    Security: []openapi.SecurityDef{
+        openapi.BearerAuth(),              // Authorization: Bearer <token>
+        openapi.APIKeyHeader("X-API-Key"), // custom header
+    },
+})
+```
+
+| Helper | Description |
+|--------|-------------|
+| `openapi.BearerAuth()` | Bearer JWT authentication |
+| `openapi.APIKeyHeader(name)` | API key via custom header |
+| `openapi.APIKeyCookie(name)` | API key via cookie |
+| `openapi.OAuth2AuthCode(cfg)` | OAuth2 authorization code flow |
+
+Mark individual routes as public with `.NoSecurity()`:
+
+```go
+c.GET("/public", c.publicHandler).NoSecurity()
+```
+
+## Config Options
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `Title` | (required) | API name shown in Swagger UI |
+| `Version` | `"1.0.0"` | API version string |
+| `Description` | `""` | Markdown description |
+| `SpecPath` | `"/openapi.json"` | JSON spec endpoint |
+| `YAMLPath` | `"/openapi.yaml"` | YAML spec endpoint (set `"-"` to disable) |
+| `DocsPath` | `"/docs"` | Swagger UI endpoint |
+| `Security` | `nil` | Global security schemes |
+| `AutoErrorResponses` | `true` | Auto-inject 400/404/422/500 responses |
+| `TryItOutEnabled` | `false` | Pre-activate "Try it out" in Swagger UI |
+| `UseRFC9457` | `false` | Use ProblemDetail schema for error responses |
 
 ## Example Spec Output
 

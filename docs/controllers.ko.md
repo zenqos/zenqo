@@ -40,9 +40,9 @@ app.UseController(NewUserController(svc))
 | `POST` | 201 Created |
 | `PUT` | 200 OK |
 | `PATCH` | 200 OK |
-| `DELETE` | 204 No Content |
+| `DELETE` | 200 OK |
 
-어떤 메서드든 `nil` 데이터를 반환하면 204로 응답합니다.
+어떤 메서드든 `nil` 데이터를 반환하면 204 No Content로 응답합니다.
 
 ## 라우트 수준 설정
 
@@ -55,7 +55,7 @@ c.GET("/{id}", c.getOne).
     Use(myMiddleware)
 ```
 
-사용 가능한 체인 메서드: `UseGuard`, `UseInterceptor`, `Use`
+사용 가능한 체인 메서드: `UseGuard`, `UseInterceptor`, `Use`, `Summary`, `Description`, `Tags`, `Body`, `Response`, `Deprecated`, `NoSecurity`
 
 ## 컨트롤러 수준 가드 / 인터셉터 / 미들웨어
 
