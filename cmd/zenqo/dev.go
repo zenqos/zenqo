@@ -135,7 +135,7 @@ func runWithWatch(dir, entry string) error {
 		if c == nil || c.Process == nil {
 			return
 		}
-		syscall.Kill(-c.Process.Pid, syscall.SIGTERM)
+		_ = syscall.Kill(-c.Process.Pid, syscall.SIGTERM)
 		done := make(chan struct{})
 		go func() {
 			c.Wait() //nolint:errcheck
@@ -144,7 +144,7 @@ func runWithWatch(dir, entry string) error {
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
-			syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
+			_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
 			<-done
 		}
 	}
