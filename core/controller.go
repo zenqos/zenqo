@@ -215,7 +215,7 @@ func adapt(method string, h HandlerFunc, errHandler ErrorHandlerFunc) http.Handl
 			errHandler(w, r, err)
 			return
 		}
-		if data == nil || method == "DELETE" {
+		if data == nil {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
