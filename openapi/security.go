@@ -1,9 +1,20 @@
 package openapi
 
+import "strings"
+
 // SecurityDef pairs a scheme name with its definition for use in Config.Security.
 type SecurityDef struct {
 	name   string
 	scheme *SecurityScheme
+}
+
+func toSchemeID(s string) string {
+	s = strings.ReplaceAll(s, "-", "")
+	s = strings.ReplaceAll(s, "_", "")
+	if len(s) > 0 && s[0] >= 'A' && s[0] <= 'Z' {
+		s = strings.ToLower(s[:1]) + s[1:]
+	}
+	return s
 }
 
 // BearerAuth creates a Bearer token (JWT) security scheme.
@@ -31,7 +42,7 @@ func BearerAuth() SecurityDef {
 //	openapi.APIKeyHeader("X-API-Key")
 func APIKeyHeader(headerName string) SecurityDef {
 	return SecurityDef{
-		name: "apiKeyHeader",
+		name: toSchemeID(headerName),
 		scheme: &SecurityScheme{
 			Type: "apiKey",
 			In:   "header",
@@ -43,7 +54,7 @@ func APIKeyHeader(headerName string) SecurityDef {
 // APIKeyCookie creates an API key security scheme sent via a cookie.
 func APIKeyCookie(cookieName string) SecurityDef {
 	return SecurityDef{
-		name: "apiKeyCookie",
+		name: toSchemeID(cookieName),
 		scheme: &SecurityScheme{
 			Type: "apiKey",
 			In:   "cookie",
