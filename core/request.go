@@ -11,26 +11,40 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	zlog "github.com/zenqos/zenqo/internal/log"
 )
 
-// MaxBodySize is the maximum allowed request body size for Bind.
+var (
+	maxBodySize   atomic.Int64
+	maxUploadSize atomic.Int64
+	maxFileCount  atomic.Int32
+	maxSingleFile atomic.Int64
+)
+
+func init() {
+	maxBodySize.Store(1 << 20)
+	maxUploadSize.Store(32 << 20)
+	maxFileCount.Store(20)
+	maxSingleFile.Store(10 << 20)
+}
+
+// SetMaxBodySize sets the maximum allowed request body size for Bind.
 // Default is 1 MB. Set to 0 to disable the limit.
-// Configure this before calling app.Start() to avoid data races.
-var MaxBodySize int64 = 1 << 20
+func SetMaxBodySize(n int64) { maxBodySize.Store(n) }
 
-// MaxUploadSize is the maximum allowed multipart form size for file uploads.
-// Default is 32 MB. Configure before app.Start() to avoid data races.
-var MaxUploadSize int64 = 32 << 20
+// SetMaxUploadSize sets the maximum allowed multipart form size for file uploads.
+// Default is 32 MB.
+func SetMaxUploadSize(n int64) { maxUploadSize.Store(n) }
 
-// MaxFileCount is the maximum number of files accepted in a single BindFiles call.
+// SetMaxFileCount sets the maximum number of files accepted in a single BindFiles call.
 // Default is 20. Set to 0 to disable the limit.
-var MaxFileCount int = 20
+func SetMaxFileCount(n int) { maxFileCount.Store(int32(n)) }
 
-// MaxSingleFileSize is the maximum allowed size for a single uploaded file.
+// SetMaxSingleFileSize sets the maximum allowed size for a single uploaded file.
 // Default is 10 MB. Set to 0 to disable the limit.
-var MaxSingleFileSize int64 = 10 << 20
+func SetMaxSingleFileSize(n int64) { maxSingleFile.Store(n) }
 
 // Bind decodes the JSON request body into T.
 // Returns ErrBadRequest automatically if the body is missing or malformed —
@@ -58,12 +72,11 @@ func Bind[T any](r *http.Request) (T, error) {
 		}
 	}
 	body := io.Reader(r.Body)
-	if MaxBodySize > 0 {
-		body = io.LimitReader(r.Body, MaxBodySize)
+	if limit := maxBodySize.Load(); limit > 0 {
+		body = io.LimitReader(r.Body, limit+1)
 	}
 	err := json.NewDecoder(body).Decode(&v)
-	// Always drain any remaining bytes so keep-alive connections are not stalled.
-	_, _ = io.Copy(io.Discard, body)
+	_, _ = io.Copy(io.Discard, r.Body)
 	if err != nil {
 		return v, ErrBadRequest("invalid request body")
 	}
@@ -145,13 +158,13 @@ func setFieldFromString(fv reflect.Value, raw, key string) error {
 	switch fv.Kind() {
 	case reflect.String:
 		fv.SetString(raw)
-	case reflect.Int, reflect.Int64:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		n, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
 			return ErrBadRequest(fmt.Sprintf("invalid query parameter %q: expected integer", key))
 		}
 		fv.SetInt(n)
-	case reflect.Uint, reflect.Uint64:
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		n, err := strconv.ParseUint(raw, 10, 64)
 		if err != nil {
 			return ErrBadRequest(fmt.Sprintf("invalid query parameter %q: expected unsigned integer", key))
@@ -241,21 +254,26 @@ func BindFile(r *http.Request, field string) (*UploadedFile, error) {
 //		// process f.Content
 //	}
 func BindFiles(r *http.Request, field string) ([]*UploadedFile, error) {
-	if err := r.ParseMultipartForm(MaxUploadSize); err != nil {
+	if err := r.ParseMultipartForm(maxUploadSize.Load()); err != nil {
 		zlog.Err("BindFiles", err.Error())
 		return nil, ErrBadRequest("invalid multipart form")
+	}
+	if r.MultipartForm == nil {
+		return nil, nil
 	}
 	fhs := r.MultipartForm.File[field]
 	if len(fhs) == 0 {
 		return nil, nil
 	}
-	if MaxFileCount > 0 && len(fhs) > MaxFileCount {
-		return nil, ErrBadRequest(fmt.Sprintf("too many files: maximum %d files per request", MaxFileCount))
+	fileCount := int(maxFileCount.Load())
+	if fileCount > 0 && len(fhs) > fileCount {
+		return nil, ErrBadRequest(fmt.Sprintf("too many files: maximum %d files per request", fileCount))
 	}
+	singleLimit := maxSingleFile.Load()
 	result := make([]*UploadedFile, 0, len(fhs))
 	for _, fh := range fhs {
-		if MaxSingleFileSize > 0 && fh.Size > MaxSingleFileSize {
-			return nil, ErrBadRequest(fmt.Sprintf("file %q exceeds maximum size of %d bytes", fh.Filename, MaxSingleFileSize))
+		if singleLimit > 0 && fh.Size > singleLimit {
+			return nil, ErrBadRequest(fmt.Sprintf("file %q exceeds maximum size of %d bytes", fh.Filename, singleLimit))
 		}
 		f, err := fh.Open()
 		if err != nil {
@@ -269,7 +287,7 @@ func BindFiles(r *http.Request, field string) ([]*UploadedFile, error) {
 		result = append(result, &UploadedFile{
 			Filename:    sanitizeFilename(fh.Filename),
 			ContentType: http.DetectContentType(data),
-			Size:        fh.Size,
+			Size:        int64(len(data)),
 			Content:     data,
 			Header:      fh,
 		})
