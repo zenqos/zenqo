@@ -2,11 +2,11 @@ package openapi
 
 // Spec is the root OpenAPI 3.1 document object.
 type Spec struct {
-	OpenAPI    string                       `json:"openapi"`
-	Info       Info                         `json:"info"`
-	Paths      map[string]*PathItem         `json:"paths"`
-	Components *Components                  `json:"components,omitempty"`
-	Security   []map[string][]string        `json:"security,omitempty"`
+	OpenAPI    string               `json:"openapi"`
+	Info       Info                 `json:"info"`
+	Paths      map[string]*PathItem `json:"paths"`
+	Components *Components          `json:"components,omitempty"`
+	Security   []map[string][]string `json:"security,omitempty"`
 }
 
 // Info holds API metadata.
@@ -27,14 +27,14 @@ type PathItem struct {
 
 // Operation describes a single API operation.
 type Operation struct {
-	Summary     string                `json:"summary,omitempty"`
-	Description string                `json:"description,omitempty"`
-	OperationID string                `json:"operationId,omitempty"`
-	Tags        []string              `json:"tags,omitempty"`
-	Deprecated  bool                  `json:"deprecated,omitempty"`
-	Parameters  []*Parameter          `json:"parameters,omitempty"`
-	RequestBody *RequestBody          `json:"requestBody,omitempty"`
-	Responses   map[string]*Response  `json:"responses"`
+	Summary     string                 `json:"summary,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	OperationID string                 `json:"operationId,omitempty"`
+	Tags        []string               `json:"tags,omitempty"`
+	Deprecated  bool                   `json:"deprecated,omitempty"`
+	Parameters  []*Parameter           `json:"parameters,omitempty"`
+	RequestBody *RequestBody           `json:"requestBody,omitempty"`
+	Responses   map[string]*Response   `json:"responses"`
 	Security    *[]map[string][]string `json:"security,omitempty"`
 }
 
