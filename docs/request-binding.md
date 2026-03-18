@@ -31,7 +31,7 @@ Returns `ErrBadRequest` automatically if:
 **Body size limit** (default 1 MB):
 
 ```go
-core.MaxBodySize = 5 << 20 // 5 MB; set 0 to disable
+core.SetMaxBodySize(5 << 20) // 5 MB; set 0 to disable
 ```
 
 ## Validation Rules
@@ -39,12 +39,25 @@ core.MaxBodySize = 5 << 20 // 5 MB; set 0 to disable
 | Tag | Description |
 |-----|-------------|
 | `required` | Field must be present and non-zero |
-| `min=N` | Minimum length (string) or value (number) |
-| `max=N` | Maximum length (string) or value (number) |
+| `min=N` | Minimum length (string), value (number), or item count (slice/map) |
+| `max=N` | Maximum length (string), value (number), or item count (slice/map) |
+| `len=N` | Exact length (string, slice, array, map) |
 | `email` | Valid email format |
-| `url` | Valid URL format |
+| `url` | Valid HTTP/HTTPS URL |
 | `uuid` | Valid UUID format |
-| `oneof=a\|b\|c` | Value must be one of the listed options |
+| `oneof=a\|b\|c` | Value must be one of the listed options (string or int) |
+| `alpha` | Letters only |
+| `alphanum` | Letters and numbers only |
+| `numeric` | Digits only |
+| `lowercase` | Must be lowercase |
+| `uppercase` | Must be uppercase |
+| `contains=sub` | Must contain substring |
+| `startswith=pre` | Must start with prefix |
+| `endswith=suf` | Must end with suffix |
+| `regex=pattern` | Must match regex pattern |
+| `dive` | Validate each element of a slice/array |
+
+Nested structs are validated recursively with dot-separated field paths (e.g. `address.city`).
 
 ## Path Parameters
 
@@ -58,10 +71,33 @@ Returns `ErrBadRequest` if the parameter is missing or cannot be converted to th
 
 ## Query Parameters
 
+Single value:
+
 ```go
 page := core.BindQuery(r, "page")   // GET /users?page=2  →  "2"
 q    := core.BindQuery(r, "q")      // returns "" if absent
 ```
+
+Struct binding (with validation):
+
+```go
+type ListQuery struct {
+    Page  int      `query:"page"`
+    Limit int      `query:"limit" validate:"max=100"`
+    Sort  string   `query:"sort"  validate:"oneof=asc|desc"`
+    Tags  []string `query:"tag"`
+}
+
+func (c *Controller) list(r *http.Request) (any, error) {
+    q, err := core.BindQueryStruct[ListQuery](r)
+    if err != nil {
+        return nil, err
+    }
+    // q.Page, q.Limit, q.Sort, q.Tags are typed and validated
+}
+```
+
+Supported types: `string`, `int`, `int64`, `uint`, `uint64`, `float32`, `float64`, `bool`, `[]string`.
 
 ## Headers
 
@@ -101,10 +137,12 @@ for _, f := range files {
 }
 ```
 
-**Upload size limit** (default 32 MB):
+**Upload limits:**
 
 ```go
-core.MaxUploadSize = 64 << 20 // 64 MB
+core.SetMaxUploadSize(64 << 20)    // total form size (default 32 MB)
+core.SetMaxFileCount(10)           // max files per request (default 20)
+core.SetMaxSingleFileSize(5 << 20) // max per file (default 10 MB)
 ```
 
 > **Security note:** `Filename` is sanitized server-side (path separators and null bytes removed). `ContentType` is detected from file content, not the client's declared value. Do not use `Filename` as a filesystem path without additional validation.
