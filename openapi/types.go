@@ -2,10 +2,10 @@ package openapi
 
 // Spec is the root OpenAPI 3.1 document object.
 type Spec struct {
-	OpenAPI    string               `json:"openapi"`
-	Info       Info                 `json:"info"`
-	Paths      map[string]*PathItem `json:"paths"`
-	Components *Components          `json:"components,omitempty"`
+	OpenAPI    string                `json:"openapi"`
+	Info       Info                  `json:"info"`
+	Paths      map[string]*PathItem  `json:"paths"`
+	Components *Components           `json:"components,omitempty"`
 	Security   []map[string][]string `json:"security,omitempty"`
 }
 
