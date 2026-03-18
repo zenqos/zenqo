@@ -16,67 +16,59 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get latest tag
-        id: latest
+      - name: Read version
+        id: version
         run: |
-          tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
-      - name: Determine next version
-        id: next
-        run: |
-          current="${{ steps.latest.outputs.tag }}"
-          major=$(echo "$current" | cut -d. -f1 | tr -d v)
-          minor=$(echo "$current" | cut -d. -f2)
-          patch=$(echo "$current" | cut -d. -f3)
-
-          # Check commits since last tag for feat commits
-          has_feat=$(git log "$current"..HEAD --oneline --grep="^feat" | head -1)
-
-          if [ -n "$has_feat" ]; then
-            minor=$((minor + 1))
-            patch=0
-          else
-            patch=$((patch + 1))
-          fi
-
-          next="v${major}.${minor}.${patch}"
-          echo "version=$next" >> "$GITHUB_OUTPUT"
+          version=$(cat VERSION | tr -d '[:space:]')
+          echo "version=v${version}" >> "$GITHUB_OUTPUT"
 
       - name: Check if tag exists
         id: check
         run: |
-          if git rev-parse "${{ steps.next.outputs.version }}" >/dev/null 2>&1; then
+          if git rev-parse "${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Get previous tag
+        if: steps.check.outputs.exists == 'false'
+        id: prev
+        run: |
+          tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Generate release notes
         if: steps.check.outputs.exists == 'false'
         id: notes
         run: |
-          current="${{ steps.latest.outputs.tag }}"
-          next="${{ steps.next.outputs.version }}"
+          prev="${{ steps.prev.outputs.tag }}"
+          next="${{ steps.version.outputs.version }}"
+          range="HEAD"
+          if [ -n "$prev" ]; then
+            range="${prev}..HEAD"
+          fi
 
           {
             echo "notes<<NOTES_EOF"
             echo "## Changes"
             echo ""
-            git log "$current"..HEAD --oneline --no-merges | while read -r line; do
+            git log "$range" --oneline --no-merges | while read -r line; do
               echo "- $line"
             done
             echo ""
-            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${current}...${next}"
+            if [ -n "$prev" ]; then
+              echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${prev}...${next}"
+            fi
             echo "NOTES_EOF"
           } >> "$GITHUB_OUTPUT"
 
       - name: Create release
         if: steps.check.outputs.exists == 'false'
         run: |
-          gh release create "${{ steps.next.outputs.version }}" \
+          gh release create "${{ steps.version.outputs.version }}" \
             --target main \
-            --title "${{ steps.next.outputs.version }}" \
+            --title "${{ steps.version.outputs.version }}" \
             --notes "${{ steps.notes.outputs.notes }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -84,4 +76,4 @@ jobs:
       - name: Trigger pkg.go.dev update
         if: steps.check.outputs.exists == 'false'
         run: |
-          curl -s -X POST "https://pkg.go.dev/fetch/github.com/${{ github.repository }}@${{ steps.next.outputs.version }}" || true
+          curl -s -X POST "https://pkg.go.dev/fetch/github.com/${{ github.repository }}@${{ steps.version.outputs.version }}" || true
