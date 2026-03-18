@@ -31,6 +31,21 @@ func buildSpec(sb *schemaBuilder, cfg Config, routes []core.RouteEntry) *Spec {
 		Paths: make(map[string]*PathItem),
 	}
 
+	// Register global security schemes.
+	if len(cfg.Security) > 0 {
+		secSchemes := make(map[string]*SecurityScheme, len(cfg.Security))
+		var secReqs []map[string][]string
+		for _, sd := range cfg.Security {
+			secSchemes[sd.name] = sd.scheme
+			secReqs = append(secReqs, map[string][]string{sd.name: {}})
+		}
+		if spec.Components == nil {
+			spec.Components = &Components{}
+		}
+		spec.Components.SecuritySchemes = secSchemes
+		spec.Security = secReqs
+	}
+
 	for _, re := range routes {
 		oaPath := toOpenAPIPath(re.FullPath)
 		item, ok := spec.Paths[oaPath]
@@ -114,6 +129,12 @@ func buildOperation(sb *schemaBuilder, cfg Config, re core.RouteEntry, oaPath st
 	if len(op.Responses) == 0 {
 		status := defaultStatus(re.Method)
 		op.Responses[strconv.Itoa(status)] = &Response{Description: statusText(status)}
+	}
+
+	// Per-route security override: empty array means "no auth required".
+	if meta.NoSecurity {
+		empty := []map[string][]string{}
+		op.Security = &empty
 	}
 
 	// Automatically inject standard error responses unless opted out.

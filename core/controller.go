@@ -17,6 +17,7 @@ type RouteDocMeta struct {
 	Deprecated  bool
 	RequestBody any // Go type used to infer the request body JSON schema
 	Responses   []ResponseDoc
+	NoSecurity  bool // true = override global security with empty (public route)
 }
 
 // ResponseDoc describes a single HTTP response for OpenAPI schema generation.
@@ -76,6 +77,18 @@ func (rd *RouteDefinition) Body(body any) *RouteDefinition {
 // Example: .Response(200, UserDTO{}) or .Response(204, nil)
 func (rd *RouteDefinition) Response(status int, body any) *RouteDefinition {
 	rd.Meta.Responses = append(rd.Meta.Responses, ResponseDoc{Status: status, Body: body})
+	return rd
+}
+
+// NoSecurity marks this route as public, overriding any global security schemes.
+// The route will have an empty security requirement in the OpenAPI spec,
+// and Swagger UI will not show a lock icon for it.
+//
+// Example:
+//
+//	c.GET("/public", c.publicHandler).NoSecurity()
+func (rd *RouteDefinition) NoSecurity() *RouteDefinition {
+	rd.Meta.NoSecurity = true
 	return rd
 }
 

@@ -2,10 +2,11 @@ package openapi
 
 // Spec is the root OpenAPI 3.1 document object.
 type Spec struct {
-	OpenAPI    string               `json:"openapi"`
-	Info       Info                 `json:"info"`
-	Paths      map[string]*PathItem `json:"paths"`
-	Components *Components          `json:"components,omitempty"`
+	OpenAPI    string                `json:"openapi"`
+	Info       Info                  `json:"info"`
+	Paths      map[string]*PathItem  `json:"paths"`
+	Components *Components           `json:"components,omitempty"`
+	Security   []map[string][]string `json:"security,omitempty"`
 }
 
 // Info holds API metadata.
@@ -26,14 +27,15 @@ type PathItem struct {
 
 // Operation describes a single API operation.
 type Operation struct {
-	Summary     string               `json:"summary,omitempty"`
-	Description string               `json:"description,omitempty"`
-	OperationID string               `json:"operationId,omitempty"`
-	Tags        []string             `json:"tags,omitempty"`
-	Deprecated  bool                 `json:"deprecated,omitempty"`
-	Parameters  []*Parameter         `json:"parameters,omitempty"`
-	RequestBody *RequestBody         `json:"requestBody,omitempty"`
-	Responses   map[string]*Response `json:"responses"`
+	Summary     string                 `json:"summary,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	OperationID string                 `json:"operationId,omitempty"`
+	Tags        []string               `json:"tags,omitempty"`
+	Deprecated  bool                   `json:"deprecated,omitempty"`
+	Parameters  []*Parameter           `json:"parameters,omitempty"`
+	RequestBody *RequestBody           `json:"requestBody,omitempty"`
+	Responses   map[string]*Response   `json:"responses"`
+	Security    *[]map[string][]string `json:"security,omitempty"`
 }
 
 // Parameter describes a path, query, header, or cookie parameter.
@@ -65,7 +67,33 @@ type Response struct {
 
 // Components holds reusable schemas referenced by $ref.
 type Components struct {
-	Schemas map[string]*Schema `json:"schemas,omitempty"`
+	Schemas         map[string]*Schema         `json:"schemas,omitempty"`
+	SecuritySchemes map[string]*SecurityScheme `json:"securitySchemes,omitempty"`
+}
+
+// SecurityScheme describes an authentication mechanism used by the API.
+type SecurityScheme struct {
+	Type         string      `json:"type"`
+	Scheme       string      `json:"scheme,omitempty"`
+	BearerFormat string      `json:"bearerFormat,omitempty"`
+	Name         string      `json:"name,omitempty"`
+	In           string      `json:"in,omitempty"`
+	Flows        *OAuthFlows `json:"flows,omitempty"`
+}
+
+// OAuthFlows describes the available OAuth2 flows.
+type OAuthFlows struct {
+	AuthorizationCode *OAuthFlow `json:"authorizationCode,omitempty"`
+	ClientCredentials *OAuthFlow `json:"clientCredentials,omitempty"`
+	Implicit          *OAuthFlow `json:"implicit,omitempty"`
+	Password          *OAuthFlow `json:"password,omitempty"`
+}
+
+// OAuthFlow describes a single OAuth2 flow configuration.
+type OAuthFlow struct {
+	AuthorizationURL string            `json:"authorizationUrl,omitempty"`
+	TokenURL         string            `json:"tokenUrl,omitempty"`
+	Scopes           map[string]string `json:"scopes"`
 }
 
 // Schema is a JSON Schema (subset) used to describe request/response bodies.
