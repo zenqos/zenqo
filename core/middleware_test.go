@@ -138,11 +138,11 @@ func TestInterceptorToMiddleware_BeforeAfter(t *testing.T) {
 
 func TestStatusWriterCapturesCode(t *testing.T) {
 	w := httptest.NewRecorder()
-	sw := &statusWriter{ResponseWriter: w, statusCode: 200}
+	sw := &statusWriter{ResponseWriter: w, StatusCode: 200}
 	sw.WriteHeader(404)
 
-	if sw.statusCode != 404 {
-		t.Fatalf("expected 404, got %d", sw.statusCode)
+	if sw.StatusCode != 404 {
+		t.Fatalf("expected 404, got %d", sw.StatusCode)
 	}
 	if w.Code != 404 {
 		t.Fatalf("underlying writer should also be 404, got %d", w.Code)
@@ -151,7 +151,7 @@ func TestStatusWriterCapturesCode(t *testing.T) {
 
 func TestStatusWriterFlush(t *testing.T) {
 	w := httptest.NewRecorder()
-	sw := &statusWriter{ResponseWriter: w, statusCode: 200}
+	sw := &statusWriter{ResponseWriter: w, StatusCode: 200}
 	// httptest.ResponseRecorder implements http.Flusher
 	sw.Flush()
 	if !w.Flushed {
@@ -164,7 +164,7 @@ type noHijackWriter struct {
 }
 
 func TestStatusWriterHijackNotSupported(t *testing.T) {
-	sw := &statusWriter{ResponseWriter: &noHijackWriter{httptest.NewRecorder()}, statusCode: 200}
+	sw := &statusWriter{ResponseWriter: &noHijackWriter{httptest.NewRecorder()}, StatusCode: 200}
 	_, _, err := sw.Hijack()
 	if err == nil {
 		t.Fatal("expected error when underlying writer doesn't support hijacking")
@@ -176,7 +176,7 @@ func TestStatusWriterHijackSupported(t *testing.T) {
 	done := make(chan struct{})
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer close(done)
-		sw := &statusWriter{ResponseWriter: w, statusCode: 200}
+		sw := &statusWriter{ResponseWriter: w, StatusCode: 200}
 		conn, _, err := sw.Hijack()
 		if err != nil {
 			t.Errorf("Hijack should succeed on real server: %v", err)
