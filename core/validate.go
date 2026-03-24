@@ -119,7 +119,11 @@ func validateWithPrefix(v any, prefix string, seen map[uintptr]bool) error {
 						} else {
 							for _, er := range elemRules {
 								er = strings.TrimSpace(er)
-								if msg := checkRule(er, elem, elemPath); msg != "" {
+								msg, ruleErr := checkRule(er, elem, elemPath)
+								if ruleErr != nil {
+									return ruleErr
+								}
+								if msg != "" {
 									errs = append(errs, FieldError{Field: elemPath, Message: msg})
 									break
 								}
@@ -130,7 +134,11 @@ func validateWithPrefix(v any, prefix string, seen map[uintptr]bool) error {
 				break
 			}
 
-			if msg := checkRule(rule, fv, qualifiedName); msg != "" {
+			msg, ruleErr := checkRule(rule, fv, qualifiedName)
+			if ruleErr != nil {
+				return ruleErr
+			}
+			if msg != "" {
 				errs = append(errs, FieldError{Field: qualifiedName, Message: msg})
 				break // one error per field
 			}

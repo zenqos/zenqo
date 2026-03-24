@@ -1,17 +1,19 @@
 package core
 
 import (
-	"bufio"
 	"errors"
-	"fmt"
-	"net"
 	"net/http"
 
+	"github.com/zenqos/zenqo/internal/httputil"
 	zlog "github.com/zenqos/zenqo/internal/log"
 )
 
 // GuardToMiddleware converts a Guard into a standard MiddlewareFunc
 // so it can be applied at the router or controller level.
+//
+// Deprecated: Prefer UseControllerGuard on a BaseController or UseGuard on a
+// RouteDefinition. Those APIs integrate directly with the framework's error
+// handler and do not require wiring ErrorHandlerFunc manually.
 //
 // An optional ErrorHandlerFunc can be passed to route rejections through
 // a custom error handler (e.g. for RFC 9457 problem+json responses).
@@ -55,9 +57,9 @@ func InterceptorToMiddleware(i Interceptor) MiddlewareFunc {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := i.Before(r.Context(), r)
 			r = r.WithContext(ctx)
-			sw := &statusWriter{ResponseWriter: w, statusCode: 200}
+			sw := &httputil.StatusWriter{ResponseWriter: w, StatusCode: http.StatusOK}
 			next.ServeHTTP(sw, r)
-			i.After(ctx, w, sw.statusCode)
+			i.After(ctx, w, sw.StatusCode)
 		})
 	}
 }
@@ -116,55 +118,13 @@ func applyInterceptor(i Interceptor, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := i.Before(r.Context(), r)
 		r = r.WithContext(ctx)
-		sw := &statusWriter{ResponseWriter: w, statusCode: 200}
+		sw := &httputil.StatusWriter{ResponseWriter: w, StatusCode: http.StatusOK}
 		next(sw, r)
-		i.After(ctx, w, sw.statusCode)
+		i.After(ctx, w, sw.StatusCode)
 	}
 }
 
-// statusWriter wraps http.ResponseWriter to capture the written status code
-// so Interceptors can observe it in their After hook.
-// It also delegates http.Flusher and http.Hijacker so that streaming
-// responses (SSE) and connection upgrades (WebSocket) work correctly.
-type statusWriter struct {
-	http.ResponseWriter
-	statusCode  int
-	wroteHeader bool
-}
-
-func (sw *statusWriter) WriteHeader(code int) {
-	if sw.wroteHeader {
-		return
-	}
-	sw.statusCode = code
-	sw.wroteHeader = true
-	sw.ResponseWriter.WriteHeader(code)
-}
-
-// Write overrides the default Write to track whether any response has been started,
-// even when WriteHeader is not called explicitly (implicit 200).
-func (sw *statusWriter) Write(b []byte) (int, error) {
-	if !sw.wroteHeader {
-		sw.statusCode = http.StatusOK
-		sw.wroteHeader = true
-	}
-	return sw.ResponseWriter.Write(b)
-}
-
-// Flush implements http.Flusher, enabling streaming responses such as SSE.
-// It is a no-op if the underlying ResponseWriter does not support flushing.
-func (sw *statusWriter) Flush() {
-	if f, ok := sw.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
-	}
-}
-
-// Hijack implements http.Hijacker, enabling WebSocket and other connection upgrades.
-// Returns an error if the underlying ResponseWriter does not support hijacking.
-func (sw *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	h, ok := sw.ResponseWriter.(http.Hijacker)
-	if !ok {
-		return nil, nil, fmt.Errorf("zenqo: underlying ResponseWriter does not support hijacking")
-	}
-	return h.Hijack()
-}
+// statusWriter is a package-level alias for httputil.StatusWriter.
+// It is used by Interceptors and the panic recoverer to capture the HTTP status code
+// written by downstream handlers.
+type statusWriter = httputil.StatusWriter

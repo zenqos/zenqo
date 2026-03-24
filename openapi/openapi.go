@@ -71,6 +71,10 @@ type Config struct {
 	// UseRFC9457 controls the error schema used for auto-injected error
 	// responses. When true, ProblemDetail is used instead of ErrorResponse.
 	UseRFC9457 bool
+	// AllowCORSOrigin sets the Access-Control-Allow-Origin header on the spec
+	// endpoints (JSON and YAML). Default is "*" when left empty.
+	// Set to "-" to omit the header entirely (e.g. for internal-only APIs).
+	AllowCORSOrigin string
 }
 
 // Mount registers the OpenAPI JSON spec and Swagger UI endpoints on the app.
@@ -100,6 +104,12 @@ func Mount(app *core.App, cfg Config) {
 	specPath := cfg.SpecPath
 	yamlPath := cfg.YAMLPath
 	docsPath := cfg.DocsPath
+
+	// Resolve the CORS origin header value. Empty → "*", "-" → omit header.
+	corsOrigin := cfg.AllowCORSOrigin
+	if corsOrigin == "" {
+		corsOrigin = "*"
+	}
 
 	// The Swagger UI must fetch the spec using the full URL path (including any
 	// global prefix set via app.SetGlobalPrefix), so the browser request resolves
@@ -159,7 +169,9 @@ func Mount(app *core.App, cfg Config) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if corsOrigin != "-" {
+			w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
+		}
 		w.WriteHeader(http.StatusOK)
 		w.Write(specJSON) //nolint:errcheck
 	})
@@ -175,7 +187,9 @@ func Mount(app *core.App, cfg Config) {
 				return
 			}
 			w.Header().Set("Content-Type", "application/yaml")
-			w.Header().Set("Access-Control-Allow-Origin", "*")
+			if corsOrigin != "-" {
+				w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
+			}
 			w.WriteHeader(http.StatusOK)
 			w.Write(specYAML) //nolint:errcheck
 		})
