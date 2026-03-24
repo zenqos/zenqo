@@ -71,13 +71,24 @@ func Bind[T any](r *http.Request) (T, error) {
 			return v, ErrBadRequest("Content-Type must be application/json")
 		}
 	}
-	body := io.Reader(r.Body)
-	if limit := maxBodySize.Load(); limit > 0 {
-		body = io.LimitReader(r.Body, limit+1)
+
+	limit := maxBodySize.Load()
+	var reader io.Reader = r.Body
+	if limit > 0 {
+		// Read one byte beyond the limit so we can detect oversized bodies.
+		reader = io.LimitReader(r.Body, limit+1)
 	}
-	err := json.NewDecoder(body).Decode(&v)
+	data, readErr := io.ReadAll(reader)
+	// Drain the original body regardless so the connection can be reused.
 	_, _ = io.Copy(io.Discard, r.Body)
-	if err != nil {
+
+	if readErr != nil {
+		return v, ErrBadRequest("invalid request body")
+	}
+	if limit > 0 && int64(len(data)) > limit {
+		return v, ErrBadRequest(fmt.Sprintf("request body must not exceed %d bytes", limit))
+	}
+	if err := json.Unmarshal(data, &v); err != nil {
 		return v, ErrBadRequest("invalid request body")
 	}
 	if err := validate(v); err != nil {
@@ -272,6 +283,8 @@ func BindFiles(r *http.Request, field string) ([]*UploadedFile, error) {
 	singleLimit := maxSingleFile.Load()
 	result := make([]*UploadedFile, 0, len(fhs))
 	for _, fh := range fhs {
+		// Quick reject using the client-declared size. This is not authoritative
+		// (the client can lie), but avoids opening files that are obviously too large.
 		if singleLimit > 0 && fh.Size > singleLimit {
 			return nil, ErrBadRequest(fmt.Sprintf("file %q exceeds maximum size of %d bytes", fh.Filename, singleLimit))
 		}
@@ -279,10 +292,20 @@ func BindFiles(r *http.Request, field string) ([]*UploadedFile, error) {
 		if err != nil {
 			return nil, ErrInternal("failed to open uploaded file")
 		}
-		data, readErr := io.ReadAll(f)
+		// Use LimitReader to enforce the per-file cap on actual bytes read,
+		// regardless of what fh.Size claims.
+		var reader io.Reader = f
+		if singleLimit > 0 {
+			reader = io.LimitReader(f, singleLimit+1)
+		}
+		data, readErr := io.ReadAll(reader)
 		f.Close()
 		if readErr != nil {
 			return nil, ErrInternal("failed to read uploaded file")
+		}
+		// Verify the actual byte count in case fh.Size was incorrect.
+		if singleLimit > 0 && int64(len(data)) > singleLimit {
+			return nil, ErrBadRequest(fmt.Sprintf("file %q exceeds maximum size of %d bytes", fh.Filename, singleLimit))
 		}
 		result = append(result, &UploadedFile{
 			Filename:    sanitizeFilename(fh.Filename),
