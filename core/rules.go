@@ -16,46 +16,49 @@ var (
 	regexCache sync.Map // pattern string → *regexp.Regexp
 )
 
-func checkRule(rule string, fv reflect.Value, field string) string {
+// checkRule evaluates a single validation rule against a field value.
+// Returns (message, nil) when the rule fails validation, ("", nil) when it passes,
+// and ("", err) when the rule itself is invalid (unknown name or bad parameter).
+func checkRule(rule string, fv reflect.Value, field string) (string, error) {
 	switch {
 	case rule == "required":
-		return checkRequired(fv, field)
+		return checkRequired(fv, field), nil
 	case strings.HasPrefix(rule, "min="):
 		return checkMin(rule[4:], fv, field)
 	case strings.HasPrefix(rule, "max="):
 		return checkMax(rule[4:], fv, field)
 	case rule == "email":
-		return checkEmail(fv, field)
+		return checkEmail(fv, field), nil
 	case strings.HasPrefix(rule, "oneof="):
-		return checkOneOf(rule[6:], fv, field)
+		return checkOneOf(rule[6:], fv, field), nil
 	case rule == "url":
-		return checkURL(fv, field)
+		return checkURL(fv, field), nil
 	case rule == "uuid":
-		return checkUUID(fv, field)
+		return checkUUID(fv, field), nil
 	case rule == "alpha":
-		return checkAlpha(fv, field)
+		return checkAlpha(fv, field), nil
 	case rule == "alphanum":
-		return checkAlphaNum(fv, field)
+		return checkAlphaNum(fv, field), nil
 	case rule == "numeric":
-		return checkNumeric(fv, field)
+		return checkNumeric(fv, field), nil
 	case strings.HasPrefix(rule, "len="):
 		return checkLen(rule[4:], fv, field)
 	case strings.HasPrefix(rule, "regex="):
-		return checkRegex(rule[6:], fv, field)
+		return checkRegex(rule[6:], fv, field), nil
 	case strings.HasPrefix(rule, "contains="):
-		return checkContains(rule[9:], fv, field)
+		return checkContains(rule[9:], fv, field), nil
 	case strings.HasPrefix(rule, "startswith="):
-		return checkStartsWith(rule[11:], fv, field)
+		return checkStartsWith(rule[11:], fv, field), nil
 	case strings.HasPrefix(rule, "endswith="):
-		return checkEndsWith(rule[9:], fv, field)
+		return checkEndsWith(rule[9:], fv, field), nil
 	case rule == "lowercase":
-		return checkLowercase(fv, field)
+		return checkLowercase(fv, field), nil
 	case rule == "uppercase":
-		return checkUppercase(fv, field)
+		return checkUppercase(fv, field), nil
 	case rule == "dive":
-		return "" // handled by validate loop, not checkRule
+		return "", nil // handled by validate loop, not checkRule
 	default:
-		panic(fmt.Sprintf("zenqo: unknown validation rule %q on field %q", rule, field))
+		return "", fmt.Errorf("zenqo: unknown validation rule %q on field %q", rule, field)
 	}
 }
 
@@ -66,96 +69,114 @@ func checkRequired(fv reflect.Value, field string) string {
 	return ""
 }
 
-func checkMin(param string, fv reflect.Value, field string) string {
+func checkMin(param string, fv reflect.Value, field string) (string, error) {
 	switch fv.Kind() {
 	case reflect.String:
 		n, err := strconv.Atoi(param)
 		if err != nil {
-			panic(fmt.Sprintf("zenqo: invalid min parameter %q for field %s", param, field))
+			return "", fmt.Errorf("zenqo: invalid min parameter %q for field %s", param, field)
 		}
 		if fv.Len() < n {
-			return fmt.Sprintf("%s must be at least %d characters", field, n)
+			return fmt.Sprintf("%s must be at least %d characters", field, n), nil
 		}
 	case reflect.Slice, reflect.Array, reflect.Map:
 		n, err := strconv.Atoi(param)
 		if err != nil {
-			panic(fmt.Sprintf("zenqo: invalid min parameter %q for field %s", param, field))
+			return "", fmt.Errorf("zenqo: invalid min parameter %q for field %s", param, field)
 		}
 		if fv.Len() < n {
-			return fmt.Sprintf("%s must have at least %d items", field, n)
+			return fmt.Sprintf("%s must have at least %d items", field, n), nil
 		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		n, err := strconv.ParseFloat(param, 64)
 		if err != nil {
-			panic(fmt.Sprintf("zenqo: invalid min parameter %q for field %s", param, field))
+			return "", fmt.Errorf("zenqo: invalid min parameter %q for field %s", param, field)
 		}
 		if fv.Int() < int64(n) {
-			return fmt.Sprintf("%s must be at least %s", field, param)
+			return fmt.Sprintf("%s must be at least %s", field, param), nil
 		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		n, err := strconv.ParseFloat(param, 64)
 		if err != nil {
-			panic(fmt.Sprintf("zenqo: invalid min parameter %q for field %s", param, field))
+			return "", fmt.Errorf("zenqo: invalid min parameter %q for field %s", param, field)
 		}
 		if fv.Uint() < uint64(n) {
-			return fmt.Sprintf("%s must be at least %s", field, param)
+			return fmt.Sprintf("%s must be at least %s", field, param), nil
 		}
 	case reflect.Float32, reflect.Float64:
 		n, err := strconv.ParseFloat(param, 64)
 		if err != nil {
-			panic(fmt.Sprintf("zenqo: invalid min parameter %q for field %s", param, field))
+			return "", fmt.Errorf("zenqo: invalid min parameter %q for field %s", param, field)
 		}
 		if fv.Float() < n {
-			return fmt.Sprintf("%s must be at least %s", field, param)
+			return fmt.Sprintf("%s must be at least %s", field, param), nil
 		}
 	}
-	return ""
+	return "", nil
 }
 
-func checkMax(param string, fv reflect.Value, field string) string {
+func checkMax(param string, fv reflect.Value, field string) (string, error) {
 	switch fv.Kind() {
 	case reflect.String:
 		n, err := strconv.Atoi(param)
 		if err != nil {
-			panic(fmt.Sprintf("zenqo: invalid max parameter %q for field %s", param, field))
+			return "", fmt.Errorf("zenqo: invalid max parameter %q for field %s", param, field)
 		}
 		if fv.Len() > n {
-			return fmt.Sprintf("%s must be at most %d characters", field, n)
+			return fmt.Sprintf("%s must be at most %d characters", field, n), nil
 		}
 	case reflect.Slice, reflect.Array, reflect.Map:
 		n, err := strconv.Atoi(param)
 		if err != nil {
-			panic(fmt.Sprintf("zenqo: invalid max parameter %q for field %s", param, field))
+			return "", fmt.Errorf("zenqo: invalid max parameter %q for field %s", param, field)
 		}
 		if fv.Len() > n {
-			return fmt.Sprintf("%s must have at most %d items", field, n)
+			return fmt.Sprintf("%s must have at most %d items", field, n), nil
 		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		n, err := strconv.ParseFloat(param, 64)
 		if err != nil {
-			panic(fmt.Sprintf("zenqo: invalid max parameter %q for field %s", param, field))
+			return "", fmt.Errorf("zenqo: invalid max parameter %q for field %s", param, field)
 		}
 		if fv.Int() > int64(n) {
-			return fmt.Sprintf("%s must be at most %s", field, param)
+			return fmt.Sprintf("%s must be at most %s", field, param), nil
 		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		n, err := strconv.ParseFloat(param, 64)
 		if err != nil {
-			panic(fmt.Sprintf("zenqo: invalid max parameter %q for field %s", param, field))
+			return "", fmt.Errorf("zenqo: invalid max parameter %q for field %s", param, field)
 		}
 		if fv.Uint() > uint64(n) {
-			return fmt.Sprintf("%s must be at most %s", field, param)
+			return fmt.Sprintf("%s must be at most %s", field, param), nil
 		}
 	case reflect.Float32, reflect.Float64:
 		n, err := strconv.ParseFloat(param, 64)
 		if err != nil {
-			panic(fmt.Sprintf("zenqo: invalid max parameter %q for field %s", param, field))
+			return "", fmt.Errorf("zenqo: invalid max parameter %q for field %s", param, field)
 		}
 		if fv.Float() > n {
-			return fmt.Sprintf("%s must be at most %s", field, param)
+			return fmt.Sprintf("%s must be at most %s", field, param), nil
 		}
 	}
-	return ""
+	return "", nil
+}
+
+func checkLen(param string, fv reflect.Value, field string) (string, error) {
+	n, err := strconv.Atoi(param)
+	if err != nil {
+		return "", fmt.Errorf("zenqo: invalid len parameter %q for field %s", param, field)
+	}
+	switch fv.Kind() {
+	case reflect.String:
+		if fv.Len() != n {
+			return fmt.Sprintf("%s must be exactly %d characters", field, n), nil
+		}
+	case reflect.Slice, reflect.Array, reflect.Map:
+		if fv.Len() != n {
+			return fmt.Sprintf("%s must have exactly %d items", field, n), nil
+		}
+	}
+	return "", nil
 }
 
 func checkEmail(fv reflect.Value, field string) string {
@@ -287,24 +308,6 @@ func checkNumeric(fv reflect.Value, field string) string {
 	for _, c := range s {
 		if c < '0' || c > '9' {
 			return fmt.Sprintf("%s must contain only numbers", field)
-		}
-	}
-	return ""
-}
-
-func checkLen(param string, fv reflect.Value, field string) string {
-	n, err := strconv.Atoi(param)
-	if err != nil {
-		return ""
-	}
-	switch fv.Kind() {
-	case reflect.String:
-		if fv.Len() != n {
-			return fmt.Sprintf("%s must be exactly %d characters", field, n)
-		}
-	case reflect.Slice, reflect.Array, reflect.Map:
-		if fv.Len() != n {
-			return fmt.Sprintf("%s must have exactly %d items", field, n)
 		}
 	}
 	return ""
