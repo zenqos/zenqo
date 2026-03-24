@@ -34,4 +34,3 @@ func sanitizeLogValue(s string) string {
 	s = strings.ReplaceAll(s, "\r", `\r`)
 	return s
 }
-
