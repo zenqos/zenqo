@@ -156,6 +156,9 @@ func (a *App) PATCH(path string, h HandlerFunc) *RouteDefinition { return a.root
 // DELETE registers a top-level DELETE route directly on the app.
 func (a *App) DELETE(path string, h HandlerFunc) *RouteDefinition { return a.root.DELETE(path, h) }
 
+// HEAD registers a top-level HEAD route directly on the app.
+func (a *App) HEAD(path string, h HandlerFunc) *RouteDefinition { return a.root.HEAD(path, h) }
+
 // UseStatic serves files from dir under the given URL prefix.
 // The global prefix set via SetGlobalPrefix is automatically prepended.
 // Example: UseStatic("/", "./public") serves index.html, CSS, JS, etc.
@@ -369,6 +372,7 @@ func (a *chiSubRouter) Post(path string, h http.HandlerFunc)   { a.r.Post(path, 
 func (a *chiSubRouter) Put(path string, h http.HandlerFunc)    { a.r.Put(path, h) }
 func (a *chiSubRouter) Patch(path string, h http.HandlerFunc)  { a.r.Patch(path, h) }
 func (a *chiSubRouter) Delete(path string, h http.HandlerFunc) { a.r.Delete(path, h) }
+func (a *chiSubRouter) Head(path string, h http.HandlerFunc)   { a.r.Head(path, h) }
 
 func (a *chiSubRouter) Use(mw ...MiddlewareFunc) {
 	for _, m := range mw {

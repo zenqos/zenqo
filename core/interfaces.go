@@ -14,6 +14,7 @@ type Router interface {
 	Put(path string, h http.HandlerFunc)
 	Patch(path string, h http.HandlerFunc)
 	Delete(path string, h http.HandlerFunc)
+	Head(path string, h http.HandlerFunc)
 	Use(mw ...MiddlewareFunc)
 	Group(path string, fn func(r Router))
 }
