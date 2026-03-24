@@ -176,27 +176,19 @@ func TestCheckUppercase(t *testing.T) {
 	assertValidationField(t, validate(dto{Name: "Hello"}), "name", "name must be uppercase")
 }
 
-// === Unknown rule panic test (#88) ===
+// === Unknown rule error test (#132) ===
 
-func TestCheckUnknownRulePanics(t *testing.T) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("expected panic for unknown rule, got none")
-		}
-		msg, ok := r.(string)
-		if !ok {
-			t.Fatalf("expected string panic, got %T: %v", r, r)
-		}
-		if !strings.Contains(msg, "requird") {
-			t.Fatalf("panic message should mention the bad rule, got: %s", msg)
-		}
-	}()
-
+func TestCheckUnknownRuleReturnsError(t *testing.T) {
 	type dto struct {
 		Email string `validate:"requird"`
 	}
-	_ = validate(dto{Email: "test@example.com"})
+	err := validate(dto{Email: "test@example.com"})
+	if err == nil {
+		t.Fatal("expected error for unknown rule, got none")
+	}
+	if !strings.Contains(err.Error(), "requird") {
+		t.Fatalf("error message should mention the bad rule, got: %s", err.Error())
+	}
 }
 
 // === New edge case tests ===

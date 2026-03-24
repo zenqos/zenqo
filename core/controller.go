@@ -200,6 +200,14 @@ func (bc *BaseController) DELETE(p string, h HandlerFunc) *RouteDefinition {
 	return rd
 }
 
+// HEAD registers a HEAD route and returns a RouteDefinition for further configuration.
+// Useful for checking resource existence and reading response headers without a body.
+func (bc *BaseController) HEAD(p string, h HandlerFunc) *RouteDefinition {
+	rd := &RouteDefinition{Method: "HEAD", Path: p, zenqoHandler: h}
+	bc.routes = append(bc.routes, rd)
+	return rd
+}
+
 // Handle registers a raw net/http handler for cases that need full ResponseWriter control.
 func (bc *BaseController) Handle(method, path string, h http.HandlerFunc) *RouteDefinition {
 	return bc.addRoute(method, path, h)
@@ -284,6 +292,8 @@ func (bc *BaseController) RegisterRoutes(r Router) {
 				r.Patch(route.Path, h.ServeHTTP)
 			case "DELETE":
 				r.Delete(route.Path, h.ServeHTTP)
+			case "HEAD":
+				r.Head(route.Path, h.ServeHTTP)
 			default:
 				zlog.Warn("RegisterRoutes", fmt.Sprintf("unsupported HTTP method %q for path %q — route not registered", route.Method, route.Path))
 			}
