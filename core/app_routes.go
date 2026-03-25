@@ -17,6 +17,14 @@ func (a *App) CollectRoutes() []RouteEntry {
 	var entries []RouteEntry
 	prefix := a.prefix
 
+	type prefixSkipper interface{ isSkippingPrefix() bool }
+	effectivePrefix := func(c Controller) string {
+		if s, ok := c.(prefixSkipper); ok && s.isSkippingPrefix() {
+			return ""
+		}
+		return prefix
+	}
+
 	add := func(c Controller, pathPrefix string) {
 		rp, ok := c.(RouteProvider)
 		if !ok {
@@ -34,11 +42,11 @@ func (a *App) CollectRoutes() []RouteEntry {
 
 	for _, m := range a.modules {
 		for _, c := range m.Controllers() {
-			add(c, prefix)
+			add(c, effectivePrefix(c))
 		}
 	}
 	for _, c := range a.controllers {
-		add(c, prefix)
+		add(c, effectivePrefix(c))
 	}
 	// Top-level routes registered directly on the app (app.GET/POST/etc.)
 	for _, rd := range a.root.routes {

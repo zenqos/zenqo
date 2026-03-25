@@ -205,6 +205,14 @@ func (a *App) buildRoutes() {
 		for _, g := range a.globalGuards {
 			a.adapter.Use(guardToMiddleware(g, errHandler))
 		}
+		type prefixSkipper interface{ isSkippingPrefix() bool }
+		skipsPrefix := func(c Controller) bool {
+			if s, ok := c.(prefixSkipper); ok {
+				return s.isSkippingPrefix()
+			}
+			return false
+		}
+
 		mount := func(r Router) {
 			for _, m := range a.modules {
 				for _, c := range m.Controllers() {
@@ -219,8 +227,38 @@ func (a *App) buildRoutes() {
 			}
 		}
 		if a.prefix != "" {
+			// Controllers that called SkipGlobalPrefix() are mounted at root.
+			a.adapter.Mount(func(r Router) {
+				for _, m := range a.modules {
+					for _, c := range m.Controllers() {
+						if skipsPrefix(c) {
+							c.RegisterRoutes(r)
+						}
+					}
+				}
+				for _, c := range a.controllers {
+					if skipsPrefix(c) {
+						c.RegisterRoutes(r)
+					}
+				}
+			})
+			// Everything else goes under the global prefix.
 			a.adapter.Route(a.prefix, func(r Router) {
-				mount(r)
+				for _, m := range a.modules {
+					for _, c := range m.Controllers() {
+						if !skipsPrefix(c) {
+							c.RegisterRoutes(r)
+						}
+					}
+				}
+				for _, c := range a.controllers {
+					if !skipsPrefix(c) {
+						c.RegisterRoutes(r)
+					}
+				}
+				if len(a.root.routes) > 0 {
+					a.root.RegisterRoutes(r)
+				}
 			})
 		} else {
 			a.adapter.Mount(mount)
