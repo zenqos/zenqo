@@ -1,0 +1,51 @@
+version: 2
+
+builds:
+  - id: zenqo
+    main: ./cmd/zenqo
+    binary: zenqo
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+
+archives:
+  - id: zenqo
+    builds: [zenqo]
+    name_template: "zenqo_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - none*
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  github:
+    owner: zenqos
+    name: zenqo
+  name_template: "{{ .Tag }}"
+
+brews:
+  - name: zenqo
+    repository:
+      owner: zenqos
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/zenqos/zenqo"
+    description: "CLI tool for the Zenqo web framework"
+    license: MIT
+    install: bin.install "zenqo"
+    test: system "#{bin}/zenqo", "--help"

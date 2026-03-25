@@ -4,13 +4,56 @@
 
 ## 설치
 
+### macOS
+
 ```bash
-# Go
+# Homebrew (권장)
+brew install zenqos/tap/zenqo
+
+# 확인
+zenqo --help
+```
+
+### Linux
+
+```bash
+# 설치 스크립트 한 줄로 설치
+curl -fsSL https://raw.githubusercontent.com/zenqos/zenqo/main/install.sh | sh
+
+# 확인
+zenqo --help
+```
+
+### Windows
+
+**관리자 권한으로 PowerShell**을 열고 실행:
+
+```powershell
+irm https://raw.githubusercontent.com/zenqos/zenqo/main/install.ps1 | iex
+```
+
+바이너리가 `%LOCALAPPDATA%\zenqo`에 설치되고 PATH에 자동으로 추가됩니다.
+
+```powershell
+# 확인 (새 터미널에서)
+zenqo --help
+```
+
+### go install (전 플랫폼)
+
+Go 1.21 이상 필요. 바이너리는 `$GOPATH/bin`에 설치됩니다.
+
+```bash
 go install github.com/zenqos/zenqo/cmd/zenqo@latest
 
-# Homebrew
-brew install zenqos/tap/zenqo
+# PATH에 추가 (아직 없다면 ~/.zshrc 또는 ~/.bashrc에 추가)
+export PATH="$PATH:$(go env GOPATH)/bin"
+
+# 확인
+zenqo --help
 ```
+
+---
 
 ## 새 프로젝트 생성
 

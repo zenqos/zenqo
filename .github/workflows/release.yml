@@ -16,6 +16,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
       - name: Read version
         id: version
         run: |
@@ -31,47 +35,21 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Get previous tag
-        if: steps.check.outputs.exists == 'false'
-        id: prev
-        run: |
-          tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
-      - name: Generate release notes
-        if: steps.check.outputs.exists == 'false'
-        id: notes
-        run: |
-          prev="${{ steps.prev.outputs.tag }}"
-          next="${{ steps.version.outputs.version }}"
-          range="HEAD"
-          if [ -n "$prev" ]; then
-            range="${prev}..HEAD"
-          fi
-
-          {
-            echo "notes<<NOTES_EOF"
-            echo "## Changes"
-            echo ""
-            git log "$range" --oneline --no-merges | while read -r line; do
-              echo "- $line"
-            done
-            echo ""
-            if [ -n "$prev" ]; then
-              echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${prev}...${next}"
-            fi
-            echo "NOTES_EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Create release
+      - name: Create tag
         if: steps.check.outputs.exists == 'false'
         run: |
-          gh release create "${{ steps.version.outputs.version }}" \
-            --target main \
-            --title "${{ steps.version.outputs.version }}" \
-            --notes "${{ steps.notes.outputs.notes }}"
+          git tag "${{ steps.version.outputs.version }}"
+          git push origin "${{ steps.version.outputs.version }}"
+
+      - name: Run GoReleaser
+        if: steps.check.outputs.exists == 'false'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
       - name: Trigger pkg.go.dev update
         if: steps.check.outputs.exists == 'false'
