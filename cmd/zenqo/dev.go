@@ -116,40 +116,7 @@ func runWithWatch(dir, entry string) error {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	var cmd *exec.Cmd
-
-	start := func() *exec.Cmd {
-		c := exec.Command("go", "run", target)
-		c.Stdout = os.Stdout
-		c.Stderr = os.Stderr
-		c.Stdin = os.Stdin
-		c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-		if err := c.Start(); err != nil {
-			fmt.Fprintf(os.Stderr, "  ❌ failed to start: %v\n", err)
-			return nil
-		}
-		return c
-	}
-
-	stop := func(c *exec.Cmd) {
-		if c == nil || c.Process == nil {
-			return
-		}
-		_ = syscall.Kill(-c.Process.Pid, syscall.SIGTERM)
-		done := make(chan struct{})
-		go func() {
-			c.Wait() //nolint:errcheck
-			close(done)
-		}()
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-			_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
-			<-done
-		}
-	}
-
-	cmd = start()
+	var cmd = startCmd(target)
 
 	snapshot := collectGoFileModTimes(".")
 
@@ -159,7 +126,7 @@ func runWithWatch(dir, entry string) error {
 	for {
 		select {
 		case <-quit:
-			stop(cmd)
+			stopCmd(cmd)
 			fmt.Println("\n  👋 stopped")
 			return nil
 		case <-ticker.C:
@@ -167,8 +134,8 @@ func runWithWatch(dir, entry string) error {
 			if !modTimesEqual(snapshot, current) {
 				snapshot = current
 				fmt.Println("\n  🔄 change detected, restarting...")
-				stop(cmd)
-				cmd = start()
+				stopCmd(cmd)
+				cmd = startCmd(target)
 			}
 		}
 	}
