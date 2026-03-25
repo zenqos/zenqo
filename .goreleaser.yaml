@@ -21,7 +21,7 @@ builds:
 
 archives:
   - id: zenqo
-    builds: [zenqo]
+    ids: [zenqo]
     name_template: "zenqo_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
