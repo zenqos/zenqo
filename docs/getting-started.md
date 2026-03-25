@@ -4,13 +4,56 @@
 
 ## Install
 
+### macOS
+
 ```bash
-# Go
+# Homebrew (recommended)
+brew install zenqos/tap/zenqo
+
+# Verify
+zenqo --help
+```
+
+### Linux
+
+```bash
+# One-liner install script
+curl -fsSL https://raw.githubusercontent.com/zenqos/zenqo/main/install.sh | sh
+
+# Verify
+zenqo --help
+```
+
+### Windows
+
+Open **PowerShell as Administrator** and run:
+
+```powershell
+irm https://raw.githubusercontent.com/zenqos/zenqo/main/install.ps1 | iex
+```
+
+This downloads the binary to `%LOCALAPPDATA%\zenqo` and adds it to your PATH automatically.
+
+```powershell
+# Verify (open a new terminal)
+zenqo --help
+```
+
+### via go install (all platforms)
+
+Requires Go 1.21+. The binary is placed in `$GOPATH/bin`.
+
+```bash
 go install github.com/zenqos/zenqo/cmd/zenqo@latest
 
-# Homebrew
-brew install zenqos/tap/zenqo
+# Add to PATH if not already (add this line to ~/.zshrc or ~/.bashrc)
+export PATH="$PATH:$(go env GOPATH)/bin"
+
+# Verify
+zenqo --help
 ```
+
+---
 
 ## Scaffold a New Project
 

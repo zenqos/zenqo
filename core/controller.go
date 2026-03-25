@@ -116,6 +116,7 @@ func (rd *RouteDefinition) Use(mw ...MiddlewareFunc) *RouteDefinition {
 // via UseControllerGuard, UseControllerInterceptor, and UseControllerMiddleware.
 type BaseController struct {
 	basePath     string
+	skipPrefix   bool
 	routes       []*RouteDefinition
 	guards       []Guard
 	interceptors []Interceptor
@@ -143,6 +144,23 @@ func (bc *BaseController) SetBasePath(p string) {
 
 // BasePath returns the URL prefix for this controller.
 func (bc *BaseController) BasePath() string { return bc.basePath }
+
+// SkipGlobalPrefix marks this controller to be mounted at the root path,
+// bypassing any global prefix set via SetGlobalPrefix.
+//
+// Example:
+//
+//	func NewController() *HealthController {
+//	    c := &HealthController{}
+//	    c.SetBasePath("/health")
+//	    c.SkipGlobalPrefix()
+//	    return c
+//	}
+func (bc *BaseController) SkipGlobalPrefix() {
+	bc.skipPrefix = true
+}
+
+func (bc *BaseController) isSkippingPrefix() bool { return bc.skipPrefix }
 
 // Routes returns all route definitions registered on this controller.
 // Implements the RouteProvider interface used by the OpenAPI spec generator.
