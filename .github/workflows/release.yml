@@ -41,12 +41,21 @@ jobs:
           git tag "${{ steps.version.outputs.version }}"
           git push origin "${{ steps.version.outputs.version }}"
 
+      - name: Extract release notes from merged PR
+        if: steps.check.outputs.exists == 'false'
+        id: notes
+        run: |
+          gh pr list --base main --state merged --limit 1 --json body \
+            --jq '.[0].body' > /tmp/release_notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run GoReleaser
         if: steps.check.outputs.exists == 'false'
         uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
-          args: release --clean
+          args: release --clean --release-notes /tmp/release_notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
