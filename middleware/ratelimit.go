@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"strconv"
@@ -248,4 +249,22 @@ func RateLimit(configs ...RateLimitConfig) func(http.Handler) http.Handler {
 	cfg := resolveCfg(configs)
 	rl := newRateLimiter(cfg.Max, cfg.Window)
 	return buildMiddleware(rl, cfg)
+}
+
+// RateLimitWithContext is like RateLimit but ties the background cleanup
+// goroutine to ctx. When ctx is cancelled the goroutine stops, making this
+// safe to use in tests and servers that need graceful shutdown.
+//
+// Example:
+//
+//	ctx, cancel := context.WithCancel(context.Background())
+//	defer cancel()
+//	app.Use(middleware.RateLimitWithContext(ctx))
+func RateLimitWithContext(ctx context.Context, configs ...RateLimitConfig) func(http.Handler) http.Handler {
+	lim := NewRateLimiter(configs...)
+	go func() {
+		<-ctx.Done()
+		lim.Stop()
+	}()
+	return lim.Middleware()
 }
