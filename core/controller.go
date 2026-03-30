@@ -262,6 +262,10 @@ func (bc *BaseController) addRoute(method, path string, handler http.HandlerFunc
 // RegisterRoutes mounts all declared routes onto the given Router,
 // applying controller-level and route-level Guards, Interceptors, and Middlewares
 // in the correct order.
+//
+// Routes are registered at their fully resolved paths (basePath + route.Path)
+// rather than using a sub-router group. This allows multiple controllers to share
+// the same base path without causing a chi panic, and allows "/" as a valid base path.
 func (bc *BaseController) RegisterRoutes(r Router) {
 	if bc.basePath == "" {
 		panic("zenqo: SetBasePath must be called before the controller is registered")
@@ -272,49 +276,56 @@ func (bc *BaseController) RegisterRoutes(r Router) {
 		errHandler = DefaultErrorHandler
 	}
 
-	r.Group(bc.basePath, func(r Router) {
-		r.Use(bc.middlewares...)
-		for _, g := range bc.guards {
-			r.Use(guardToMiddleware(g, errHandler))
-		}
-		for _, i := range bc.interceptors {
-			r.Use(InterceptorToMiddleware(i))
+	for _, route := range bc.routes {
+		fullPath := joinPath(bc.basePath, route.Path)
+
+		var handler http.HandlerFunc
+		if route.zenqoHandler != nil {
+			handler = adapt(route.Method, route.zenqoHandler, errHandler)
+		} else {
+			handler = route.HandlerFunc
 		}
 
-		for _, route := range bc.routes {
-			var handler http.HandlerFunc
-			if route.zenqoHandler != nil {
-				handler = adapt(route.Method, route.zenqoHandler, errHandler)
-			} else {
-				handler = route.HandlerFunc
-			}
-
-			for i := len(route.Interceptors) - 1; i >= 0; i-- {
-				handler = applyInterceptor(route.Interceptors[i], handler)
-			}
-			for i := len(route.Guards) - 1; i >= 0; i-- {
-				handler = applyGuard(route.Guards[i], handler, errHandler)
-			}
-			var h http.Handler = handler
-			for i := len(route.Middlewares) - 1; i >= 0; i-- {
-				h = route.Middlewares[i](h)
-			}
-			switch route.Method {
-			case "GET":
-				r.Get(route.Path, h.ServeHTTP)
-			case "POST":
-				r.Post(route.Path, h.ServeHTTP)
-			case "PUT":
-				r.Put(route.Path, h.ServeHTTP)
-			case "PATCH":
-				r.Patch(route.Path, h.ServeHTTP)
-			case "DELETE":
-				r.Delete(route.Path, h.ServeHTTP)
-			case "HEAD":
-				r.Head(route.Path, h.ServeHTTP)
-			default:
-				zlog.Warn("RegisterRoutes", fmt.Sprintf("unsupported HTTP method %q for path %q — route not registered", route.Method, route.Path))
-			}
+		// Apply route-level middleware from inside out:
+		// interceptors → guards → middlewares
+		for i := len(route.Interceptors) - 1; i >= 0; i-- {
+			handler = applyInterceptor(route.Interceptors[i], handler)
 		}
-	})
+		for i := len(route.Guards) - 1; i >= 0; i-- {
+			handler = applyGuard(route.Guards[i], handler, errHandler)
+		}
+		var h http.Handler = handler
+		for i := len(route.Middlewares) - 1; i >= 0; i-- {
+			h = route.Middlewares[i](h)
+		}
+
+		// Apply controller-level middleware from inside out:
+		// interceptors → guards → middlewares
+		for i := len(bc.interceptors) - 1; i >= 0; i-- {
+			h = InterceptorToMiddleware(bc.interceptors[i])(h)
+		}
+		for i := len(bc.guards) - 1; i >= 0; i-- {
+			h = guardToMiddleware(bc.guards[i], errHandler)(h)
+		}
+		for i := len(bc.middlewares) - 1; i >= 0; i-- {
+			h = bc.middlewares[i](h)
+		}
+
+		switch route.Method {
+		case "GET":
+			r.Get(fullPath, h.ServeHTTP)
+		case "POST":
+			r.Post(fullPath, h.ServeHTTP)
+		case "PUT":
+			r.Put(fullPath, h.ServeHTTP)
+		case "PATCH":
+			r.Patch(fullPath, h.ServeHTTP)
+		case "DELETE":
+			r.Delete(fullPath, h.ServeHTTP)
+		case "HEAD":
+			r.Head(fullPath, h.ServeHTTP)
+		default:
+			zlog.Warn("RegisterRoutes", fmt.Sprintf("unsupported HTTP method %q for path %q — route not registered", route.Method, fullPath))
+		}
+	}
 }
