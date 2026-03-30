@@ -182,3 +182,123 @@ func TestSetBasePathPanicsOnMissingSlash(t *testing.T) {
 	c := &BaseController{}
 	c.SetBasePath("noslash")
 }
+
+// --- #143: multiple controllers with the same base path ---
+
+func TestMultipleControllersWithSameBasePath(t *testing.T) {
+	c1 := &BaseController{}
+	c1.SetBasePath("/users")
+	c1.GET("/list", func(r *http.Request) (any, error) {
+		return "user-list", nil
+	})
+
+	c2 := &BaseController{}
+	c2.SetBasePath("/users")
+	c2.GET("/portfolio", func(r *http.Request) (any, error) {
+		return "portfolio-list", nil
+	})
+
+	app := NewApp()
+	app.UseController(c1)
+	app.UseController(c2)
+
+	// Handler() must not panic
+	var h http.Handler
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("unexpected panic: %v", r)
+			}
+		}()
+		h = app.Handler()
+	}()
+
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	for _, tc := range []struct {
+		path string
+		want int
+	}{
+		{"/users/list", 200},
+		{"/users/portfolio", 200},
+	} {
+		resp, err := http.Get(srv.URL + tc.path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", tc.path, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != tc.want {
+			t.Fatalf("GET %s: expected %d, got %d", tc.path, tc.want, resp.StatusCode)
+		}
+	}
+}
+
+// --- #144: SetBasePath("/") does not panic ---
+
+func TestSetBasePathRootNoPanic(t *testing.T) {
+	c := &BaseController{}
+	c.SetBasePath("/")
+	c.GET("/health", func(r *http.Request) (any, error) {
+		return "ok", nil
+	})
+
+	app := NewApp()
+	app.UseController(c)
+
+	var h http.Handler
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("unexpected panic: %v", r)
+			}
+		}()
+		h = app.Handler()
+	}()
+
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestSetBasePathRootWithGlobalPrefix(t *testing.T) {
+	c := &BaseController{}
+	c.SetBasePath("/")
+	c.GET("/ping", func(r *http.Request) (any, error) {
+		return "pong", nil
+	})
+
+	app := NewApp()
+	app.SetGlobalPrefix("/api/v1")
+	app.UseController(c)
+
+	var h http.Handler
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("unexpected panic: %v", r)
+			}
+		}()
+		h = app.Handler()
+	}()
+
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/api/v1/ping")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200 at /api/v1/ping, got %d", resp.StatusCode)
+	}
+}
